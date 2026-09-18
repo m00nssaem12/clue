@@ -1314,7 +1314,7 @@ function listenLobby(){
   fbDb.ref('rooms/'+ROOM_CODE+'/state').on('value', snap=>{
     const s = snap.val();
     if(s && s.started){
-      state = s;
+      state = normalizeState(s);
       if(document.getElementById('gameScreen').classList.contains('active')===false){
         showScreen('gameScreen');
         document.getElementById('roomInfo').textContent = '온라인 방 코드: '+ROOM_CODE;
@@ -1409,6 +1409,26 @@ function initGameCommon(players){
     forcedMoveDrawOffer: null, // {playerId, used}: 다른 사람 제안으로 끌려왔을 때 원하면 보너스카드를 뽑을 수 있는 제안
     pendingReveal: null,     // {requesterId, targetId, resolved, revealedCard}: '카드 공개 지목' 카드 처리용
   };
+}
+
+// Firebase는 빈 배열([])과 빈 객체({})를 저장하지 않고 통째로 지워버려요.
+// 그래서 온라인에서 받아온 state에 빈 칸들을 다시 채워 넣어요.
+function normalizeState(s){
+  if(!s.players) s.players = [];
+  if(!s.turnOrder) s.turnOrder = [];
+  if(!s.positions) s.positions = {};
+  if(!s.log) s.log = [];
+  if(!s.hands) s.hands = {};
+  if(!s.bonusHands) s.bonusHands = {};
+  if(!s.bonusDeck) s.bonusDeck = [];
+  if(!s.bonusDiscard) s.bonusDiscard = [];
+  if(!s.bonusTileCooldown) s.bonusTileCooldown = {};
+  s.players.forEach(p=>{
+    if(!s.hands[p.id]) s.hands[p.id] = [];
+    if(!s.bonusHands[p.id]) s.bonusHands[p.id] = [];
+  });
+  if(s.pendingSuggestion && !s.pendingSuggestion.queue) s.pendingSuggestion.queue = [];
+  return s;
 }
 
 function saveState(){
