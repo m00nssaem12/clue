@@ -1,0 +1,2482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>키링 도난 사건 - 학교판 클루</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (온라인 모드용) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+:root{
+  --bg1:#fff6e5; --bg2:#dff3ff;
+  --card:#ffffff; --ink:#3a2e2e;
+  --accent:#ff6b6b; --accent2:#4d96ff; --accent3:#ffd93d; --accent4:#6bcB77;
+  --room:#ffe8b3; --room-border:#e0a95c;
+  --hall:#c9e8ff; --hall-border:#7fb8e0;
+  --danger:#e94b4b; --ok:#3fae5c;
+  --shadow: 0 6px 0 rgba(0,0,0,0.12);
+}
+*{box-sizing:border-box; word-break:keep-all; overflow-wrap:break-word;}
+html{font-size:19px;}
+body{
+  margin:0; font-family:'Noto Sans KR',sans-serif; color:var(--ink); line-height:1.6;
+  background:linear-gradient(135deg,var(--bg1),var(--bg2));
+  min-height:100vh;
+}
+h1,h2,h3{font-family:'Jua',sans-serif; margin:0.2em 0;}
+.screen{display:none; padding:16px; max-width:1100px; margin:0 auto;}
+.screen.active{display:block;}
+.btn{
+  font-family:'Jua',sans-serif; font-size:1.05rem; border:none; border-radius:14px;
+  padding:12px 22px; cursor:pointer; background:var(--accent2); color:#fff;
+  box-shadow:var(--shadow); transition:transform .08s;
+}
+.btn:hover{transform:translateY(-2px);}
+.btn:active{transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,0.12);}
+.btn.orange{background:var(--accent);}
+.btn.green{background:var(--accent4);}
+.btn.yellow{background:var(--accent3); color:#5a4400;}
+.btn.small{padding:9px 16px; font-size:1rem; border-radius:10px;}
+.btn:disabled{opacity:0.4; cursor:not-allowed; transform:none;}
+.card-panel{
+  background:var(--card); border-radius:20px; padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.08);
+  margin-bottom:16px;
+}
+.title-wrap{text-align:center; padding:30px 10px;}
+.title-wrap .emoji-row{font-size:2.2rem; margin-bottom:6px;}
+.title-wrap h1{font-size:2.4rem; color:var(--accent);}
+.title-wrap p{font-size:1.1rem; color:#666;}
+.mode-select{display:flex; gap:20px; justify-content:center; flex-wrap:wrap; margin-top:20px;}
+.mode-card{
+  background:var(--card); border-radius:20px; padding:24px; width:240px; text-align:center;
+  box-shadow:0 8px 24px rgba(0,0,0,0.08); cursor:pointer; border:3px solid transparent;
+}
+.mode-card:hover{border-color:var(--accent2); transform:translateY(-4px);}
+.mode-card .big-emoji{font-size:3rem;}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+.center{display:flex; justify-content:center;}
+label{font-size:1rem; margin-right:6px;}
+input[type=text], input[type=number], select{
+  font-family:'Noto Sans KR',sans-serif; font-size:1rem; padding:8px 10px; border-radius:10px;
+  border:2px solid #ddd;
+}
+.player-list{display:flex; flex-direction:column; gap:8px; margin:14px 0;}
+.player-row{display:flex; align-items:center; gap:10px; background:#fafafa; padding:8px 12px; border-radius:12px;}
+.suspect-chip{
+  display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:20px;
+  border:3px solid #ddd; cursor:pointer; font-size:0.95rem; background:#fff;
+}
+.suspect-chip.selected{border-color:var(--accent2); background:#eaf4ff;}
+.suspect-chip.taken{opacity:0.35; cursor:not-allowed;}
+
+/* Board */
+#gameScreen{display:none; }
+#gameScreen.active{display:flex; flex-direction:column; gap:12px; max-width:1200px;}
+.game-top{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;}
+.turn-banner{
+  font-family:'Jua',sans-serif; font-size:1.3rem; background:#fff; padding:10px 20px; border-radius:16px;
+  box-shadow:var(--shadow);
+}
+.main-area{display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;}
+#boardWrap{ width:100%; max-width:600px; flex-shrink:0; overflow:hidden; }
+#boardScale{ transform-origin: top left; }
+#board{
+  position:relative; width:576px; height:600px;
+  background:#e7d3ac; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,0.15);
+}
+.cell{
+  position:absolute; width:24px; height:24px; box-sizing:border-box;
+  background:#f7ecd6; border:1px solid rgba(150,120,80,0.30);
+}
+.cell.door{ background:#ffe6a3; border-color:#d9a83a; }
+.cell.occupied{ background:#ffc9c9; }
+.cell.reachable{ background:#b7f0c0; border-color:var(--ok); cursor:pointer; }
+.cell.bonus-tile{ background:#ffe0f7; border-color:#c76bd6; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; z-index:2; animation:pulse-bg 1.6s infinite; }
+.cell.bonus-tile.cooldown{ opacity:.4; animation:none; cursor:not-allowed; }
+.cell.bonus-tile.reachable{ background:#ffd0f5; border-color:var(--ok); }
+.room-div{
+  position:absolute; background:var(--room); border:3px solid var(--room-border); border-radius:10px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-size:0.85rem; line-height:1.1; text-align:center; user-select:none;
+}
+.room-div .room-emoji{font-size:1.5rem;}
+.room-div.reachable{ background:#c8f5cf; border-color:var(--ok); cursor:pointer; animation:pulse-bg 1s infinite; }
+.room-div.current-room{ box-shadow:0 0 0 4px rgba(77,150,255,0.45) inset; }
+.room-div .secret-tag{ font-size:0.6rem; color:#9a6a1c; margin-top:2px; }
+.room-div.vault-room{ background:#ffe0e0; border-color:var(--danger); border-width:4px; }
+.room-div .vault-tag{ font-size:0.6rem; color:var(--danger); font-weight:bold; margin-top:2px; }
+@keyframes pulse-bg{0%{filter:brightness(1);}50%{filter:brightness(1.12);}100%{filter:brightness(1);}}
+.token{
+  position:absolute; width:20px; height:20px; border-radius:50%; border:2px solid #fff;
+  box-shadow:0 2px 4px rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center;
+  font-size:0.72rem; transform:translate(-50%,-50%); z-index:5; pointer-events:none;
+}
+.token-npc{ opacity:0.45; filter:grayscale(35%); }
+.side-panel{flex:1; min-width:280px; display:flex; flex-direction:column; gap:12px;}
+.hand-cards{display:flex; gap:8px; flex-wrap:wrap;}
+.mini-card{
+  background:#fff; border:2px solid #ddd; border-radius:10px; padding:7px 12px; font-size:1.05rem;
+  display:flex; align-items:center; gap:4px; box-shadow:0 2px 0 rgba(0,0,0,0.08);
+}
+.mini-card.wide{ width:100%; justify-content:space-between; flex-wrap:wrap; font-size:0.95rem; }
+.mini-card.wide .bonus-desc{ flex-basis:100%; font-size:0.82rem; color:#777; font-weight:normal; }
+#bonusCountBadge{ font-size:0.8rem; color:var(--danger); font-weight:bold; }
+.log-box{
+  background:#fff; border-radius:14px; padding:10px 14px; max-height:180px; overflow-y:auto;
+  font-size:1rem; box-shadow:var(--shadow);
+}
+.log-box p{margin:4px 0;}
+
+/* Notepad */
+.notepad-grid{display:flex; flex-direction:column; gap:18px;}
+.notepad-section{width:100%;}
+.notepad-section h3{font-size:1rem; color:#555; margin:0 0 6px; padding-bottom:4px; border-bottom:2px solid #eee;}
+.notepad-scroll{overflow-x:auto;}
+.notepad-table{border-collapse:collapse; width:100%; font-size:0.95rem;}
+.notepad-table th, .notepad-table td{border:1px solid #ddd; padding:4px 6px; text-align:center;}
+.notepad-table th{background:#f4f4f4;}
+.notepad-table td{cursor:pointer;}
+.notepad-table td.marked{background:#ffdddd; font-weight:bold;}
+.notepad-table td.checked{background:#d8f8d8;}
+
+/* Modal / overlay */
+.overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,0.55); display:none; align-items:center; justify-content:center;
+  z-index:100; padding:14px;
+}
+.overlay.active{display:flex;}
+.modal{
+  background:#fff; border-radius:20px; padding:24px; max-width:520px; width:100%; max-height:88vh; overflow-y:auto;
+  box-shadow:0 10px 40px rgba(0,0,0,0.3);
+}
+.pass-screen-content{text-align:center;}
+.pass-screen-content .big-emoji{font-size:4rem; word-break:keep-all; overflow-wrap:break-word; line-height:1.3;}
+.pass-screen-content .big-emoji.text-mode{font-size:1.6rem; font-weight:700; padding:0 8px; line-height:1.5;}
+.pick-grid{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; justify-content:center;}
+.pick-chip{
+  padding:10px 16px; border-radius:14px; border:3px solid #ddd; cursor:pointer; background:#fafafa; font-size:1rem;
+}
+.pick-chip.selected{border-color:var(--accent); background:#ffecec;}
+.section-title{font-size:1.1rem; margin:14px 0 6px; color:#555;}
+.close-x{float:right; cursor:pointer; font-size:1.3rem;}
+.win-box{text-align:center;}
+.win-box .big-emoji{font-size:5rem;}
+.solution-reveal{display:flex; gap:10px; justify-content:center; margin:14px 0; flex-wrap:wrap;}
+.tabs{display:flex; gap:6px; margin-bottom:10px;}
+.tab-btn{padding:8px 14px; border-radius:10px 10px 0 0; border:none; background:#eee; cursor:pointer; font-family:'Jua',sans-serif;}
+.tab-btn.active{background:#fff; box-shadow:0 -2px 6px rgba(0,0,0,0.08);}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+#roomInfo{position:fixed; bottom:0; left:0; right:0; text-align:center; font-size:0.9rem; color:#999; padding:4px;}
+
+/* 온라인 연결 상태 UI */
+.conn-banner{
+  position:fixed; top:0; left:0; right:0; z-index:3000; text-align:center;
+  padding:9px 12px; font-size:0.9rem; font-weight:bold; color:#5a4400;
+  background:var(--accent3); box-shadow:0 2px 10px rgba(0,0,0,0.25);
+  font-family:'Jua',sans-serif;
+}
+.conn-banner.urgent{ background:var(--danger); color:#fff; }
+.conn-banner.hidden{ display:none; }
+.hidden{ display:none !important; }
+.ping-badges{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+.ping-chip{ font-size:0.8rem; padding:3px 10px; border-radius:12px; background:#eee; color:#888; }
+.ping-chip.ping-good{ color:var(--ok); background:#e4f8e8; }
+.ping-chip.ping-mid{ color:#a98600; background:#fff6d9; }
+.ping-chip.ping-bad{ color:var(--danger); background:#ffe6e6; }
+.ping-chip.ping-stale{ color:#999; background:#eee; text-decoration:line-through; }
+
+/* ---- 채팅 (온라인 모드에서만 노출) ---- */
+.chat-toggle-btn{
+  position:fixed; right:16px; bottom:16px; z-index:2500;
+  width:52px; height:52px; border-radius:50%; padding:0; font-size:22px;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 10px rgba(0,0,0,0.35); border:none; background:var(--accent2); color:#fff; cursor:pointer;
+}
+.chat-badge{
+  position:absolute; top:-4px; right:-4px; background:var(--danger); color:#fff;
+  font-size:11px; font-weight:bold; border-radius:10px; min-width:18px; height:18px;
+  display:flex; align-items:center; justify-content:center; padding:0 4px;
+  box-shadow:0 1px 4px rgba(0,0,0,0.4);
+}
+.chat-widget{
+  position:fixed; right:16px; bottom:78px; z-index:2500;
+  width:300px; max-width:90vw; max-height:56vh;
+  display:flex; flex-direction:column;
+  background:#fff; border-radius:18px; box-shadow:0 8px 24px rgba(0,0,0,0.25);
+  overflow:hidden; font-family:'Noto Sans KR',sans-serif;
+}
+.chat-header{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:9px 14px; background:var(--accent2); color:#fff;
+  font-family:'Jua',sans-serif; font-size:1rem; flex-shrink:0;
+}
+.chat-header button{ padding:2px 10px; font-size:0.85rem; box-shadow:none; background:transparent; color:#fff; border:none; cursor:pointer; }
+.chat-messages{ flex:1; overflow-y:auto; padding:8px 10px; font-size:1rem; display:flex; flex-direction:column; gap:5px; min-height:120px; }
+.chat-msg{ line-height:1.4; word-break:keep-all; overflow-wrap:break-word; }
+.chat-msg .who{ color:var(--accent2); font-weight:bold; margin-right:4px; }
+.chat-msg.mine .who{ color:var(--ok); }
+.chat-input-row{ display:flex; gap:6px; padding:8px; border-top:1px solid #eee; flex-shrink:0; }
+.chat-input-row input{ flex:1; padding:8px 10px; font-size:0.95rem; }
+.chat-input-row button{ padding:8px 14px; font-size:0.95rem; }
+.chat-hint{ padding:4px 12px; font-size:0.8rem; color:#a15c00; background:#fff6d9; flex-shrink:0; }
+@media (max-width:700px){
+  .chat-widget{ width:92vw; right:4vw; bottom:70px; }
+  .chat-toggle-btn{ right:14px; bottom:14px; }
+}
+</style>
+</head>
+<body>
+
+<div id="connBanner" class="conn-banner hidden"></div>
+
+<!-- ===================== TITLE / MODE SELECT ===================== -->
+<div class="screen active" id="titleScreen">
+  <div class="title-wrap">
+    <div class="emoji-row">🔑🎒🕵️‍♀️🏫</div>
+    <h1>키링 도난 사건</h1>
+    <p>누가, 무엇에 담아, 어디에 숨겼을까? 학교판 추리 게임!</p>
+  </div>
+  <div class="mode-select">
+    <div class="mode-card" onclick="goSetup('local')">
+      <div class="big-emoji">🧑‍🤝‍🧑</div>
+      <h3>같이 모여서 (로컬)</h3>
+      <p>한 기기로 순서대로 돌려가며 플레이해요</p>
+    </div>
+    <div class="mode-card" onclick="goSetup('online')">
+      <div class="big-emoji">🌐</div>
+      <h3>각자 기기로 (온라인)</h3>
+      <p>방 코드로 접속해서 실시간으로 플레이해요</p>
+    </div>
+  </div>
+  <div class="center" style="margin-top:18px;">
+    <button class="btn yellow" onclick="openOverlay('howtoOverlay')">📖 게임 방법 보기</button>
+  </div>
+</div>
+
+<!-- ===================== SETUP: LOCAL ===================== -->
+<div class="screen" id="localSetupScreen">
+  <div class="card-panel">
+    <h2>🧑‍🤝‍🧑 로컬 모드 설정</h2>
+    <div class="row">
+      <label>참가자 수:</label>
+      <select id="localPlayerCount" onchange="renderLocalPlayerInputs()">
+        <option value="2">2명</option><option value="3">3명</option><option value="4">4명</option>
+        <option value="5">5명</option><option value="6" selected>6명</option>
+      </select>
+    </div>
+    <p style="font-size:0.9rem; color:#777;">각자 이름을 입력해주세요! 캐릭터는 게임 시작할 때 무작위로 정해져요.</p>
+    <div class="player-list" id="localPlayerInputs"></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn orange" onclick="startLocalGame()">게임 시작!</button>
+      <button class="btn small" onclick="showScreen('titleScreen')">뒤로</button>
+      <button class="btn small yellow" onclick="openOverlay('howtoOverlay')">📖 게임 방법</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SETUP: ONLINE ===================== -->
+<div class="screen" id="onlineSetupScreen">
+  <div class="card-panel">
+    <h2>🌐 온라인 모드</h2>
+    <div class="tabs">
+      <button class="tab-btn active" id="tabCreateBtn" onclick="switchOnlineTab('create')">방 만들기</button>
+      <button class="tab-btn" id="tabJoinBtn" onclick="switchOnlineTab('join')">방 참가하기</button>
+    </div>
+    <div class="tab-content active" id="tabCreate">
+      <div class="row"><label>내 이름:</label><input type="text" id="createNickname" placeholder="이름을 입력하세요"></div>
+      <div class="row" style="margin-top:8px;"><button class="btn orange" onclick="createOnlineRoom()">방 만들기</button></div>
+    </div>
+    <div class="tab-content" id="tabJoin">
+      <div class="row"><label>내 이름:</label><input type="text" id="joinNickname" placeholder="이름을 입력하세요"></div>
+      <div class="row" style="margin-top:8px;"><label>방 코드:</label><input type="text" id="joinCode" maxlength="6" placeholder="6자리 코드"></div>
+      <div class="row" style="margin-top:8px;"><button class="btn orange" onclick="joinOnlineRoom()">참가하기</button></div>
+    </div>
+    <p id="onlineSetupMsg" style="color:var(--danger);"></p>
+    <div class="row">
+      <button class="btn small" onclick="showScreen('titleScreen')">뒤로</button>
+      <button class="btn small yellow" onclick="openOverlay('howtoOverlay')">📖 게임 방법</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ONLINE LOBBY ===================== -->
+<div class="screen" id="onlineLobbyScreen">
+  <div class="card-panel">
+    <h2>대기실 <span id="lobbyRoomCode" style="color:var(--accent2);"></span></h2>
+    <p>친구들에게 방 코드를 알려주세요! 다 모이면 준비 완료를 눌러주세요.</p>
+    <div class="ping-badges pingBadgesTarget" id="lobbyPingBadges" style="margin-bottom:8px;"></div>
+    <div class="player-list" id="lobbyPlayerList"></div>
+    <p style="font-size:0.85rem; color:#777;">캐릭터는 게임 시작할 때 무작위로 정해져요.</p>
+    <div class="row" style="margin-top:14px;">
+      <button class="btn green" id="lobbyReadyBtn" onclick="toggleReady()">준비 완료!</button>
+      <button class="btn orange" id="lobbyStartBtn" style="display:none;" onclick="hostStartOnlineGame()">게임 시작! (방장)</button>
+      <button class="btn small yellow" onclick="openOverlay('howtoOverlay')">📖 게임 방법</button>
+      <button class="btn small" onclick="leaveOnlineRoom()">🚪 나가기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== GAME SCREEN ===================== -->
+<div class="screen" id="gameScreen">
+  <div class="game-top">
+    <div class="turn-banner" id="turnBanner">-</div>
+    <div class="ping-badges pingBadgesTarget" id="gamePingBadges"></div>
+    <div class="row">
+      <button class="btn small yellow" onclick="openNotepad()">📝 메모장</button>
+      <button class="btn small" onclick="openMyHand()">🃏 내 카드</button>
+      <button class="btn small" style="background:#ffb8e6; color:#5a1a4a;" onclick="openBonusCards()">❓ 보너스카드<span id="bonusCountBadge"></span></button>
+      <button class="btn small orange" onclick="openAccuse()">🚨 최종 고발</button>
+      <button class="btn small" onclick="openOverlay('howtoOverlay')">📖 게임 방법</button>
+      <button class="btn small" id="btnLeaveGame" style="display:none;" onclick="leaveOnlineRoom()">🚪 나가기</button>
+    </div>
+  </div>
+  <div class="main-area">
+    <div id="boardWrap"><div id="boardScale"><div id="board"></div></div></div>
+    <div class="side-panel">
+      <div class="card-panel">
+        <h3 style="margin-bottom:8px;">🎲 행동</h3>
+        <div class="row" id="actionButtons"></div>
+      </div>
+      <div class="card-panel">
+        <h3 style="margin-bottom:8px;">📜 사건 기록</h3>
+        <div class="log-box" id="logBox"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== OVERLAYS ===================== -->
+<div class="overlay" id="passOverlay">
+  <div class="modal pass-screen-content">
+    <div class="big-emoji">🙈</div>
+    <h2 id="passOverlayName">-</h2>
+    <p>다른 사람은 화면을 보지 마세요!</p>
+    <button class="btn orange" id="passOverlayBtn">확인했어요, 보여주기</button>
+  </div>
+</div>
+
+<div class="overlay" id="handOverlay">
+  <div class="modal">
+    <span class="close-x" onclick="closeOverlay('handOverlay')">✖</span>
+    <h2>🃏 내 카드</h2>
+    <div class="hand-cards" id="handOverlayCards"></div>
+  </div>
+</div>
+
+<div class="overlay" id="bonusOverlay">
+  <div class="modal">
+    <span class="close-x" onclick="closeOverlay('bonusOverlay')">✖</span>
+    <h2>❓ 내 보너스카드</h2>
+    <p style="font-size:0.85rem; color:#777;">복도의 ❓ 칸을 밟거나, 다른 사람 제안으로 끌려왔을 때 원하면 보너스카드를 얻어요 (13장 덱에서 무작위로). [카드 엿보기]는 다른 사람이 반증할 때 자동으로 제안이 떠서 여기선 따로 사용 버튼이 없어요.</p>
+    <div id="bonusOverlayCards"></div>
+  </div>
+</div>
+
+<div class="overlay" id="teleportOverlay">
+  <div class="modal">
+    <span class="close-x" onclick="closeOverlay('teleportOverlay')">✖</span>
+    <h2>🚪 어디로 이동할까요?</h2>
+    <div class="pick-grid" id="teleportGrid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="revealTargetOverlay">
+  <div class="modal">
+    <span class="close-x" onclick="closeOverlay('revealTargetOverlay')">✖</span>
+    <h2>📣 누구를 지목할까요?</h2>
+    <div class="pick-grid" id="revealTargetGrid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="publicRevealOverlay">
+  <div class="modal">
+    <h2>📣 카드 한 장을 골라 모두에게 공개해주세요</h2>
+    <div class="pick-grid" id="publicRevealGrid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="freeSuggestOverlay">
+  <div class="modal" style="max-width:560px;">
+    <span class="close-x" onclick="closeOverlay('freeSuggestOverlay')">✖</span>
+    <h2>🔍 한 번 더 추리 (말은 이동하지 않아요)</h2>
+    <p style="font-size:0.85rem; color:#777;">장소, 용의자, 도구를 하나씩 골라주세요.</p>
+    <div class="section-title">장소</div>
+    <div class="pick-grid" id="freeSuggestRoomGrid"></div>
+    <div class="section-title">용의자</div>
+    <div class="pick-grid" id="freeSuggestSuspectGrid"></div>
+    <div class="section-title">도구</div>
+    <div class="pick-grid" id="freeSuggestItemGrid"></div>
+    <button class="btn orange" style="margin-top:12px;" onclick="submitFreeSuggestion()">추리 발표!</button>
+  </div>
+</div>
+
+<div class="overlay" id="peekOfferOverlay">
+  <div class="modal pass-screen-content">
+    <div class="big-emoji">👀</div>
+    <p>[카드 엿보기] 카드로 방금 공개된 카드를 같이 볼까요?</p>
+    <div class="row" style="justify-content:center; margin-top:10px;">
+      <button class="btn small orange" onclick="answerPeekOfferOnline(true)">볼래요 (카드 사용)</button>
+      <button class="btn small" onclick="answerPeekOfferOnline(false)">안 볼래요</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="notepadOverlay">
+  <div class="modal" style="max-width:820px;">
+    <span class="close-x" onclick="closeOverlay('notepadOverlay')">✖</span>
+    <h2>📝 나의 추리 메모장</h2>
+    <p style="font-size:0.85rem; color:#777;">각 사람 칸을 클릭하면 표시가 바뀌어요 (한번: ✔ 그 카드를 갖고 있음 / 두번: ✖ 안 갖고 있음으로 추정 / 세번: 지우기). 내 카드는 자동으로 표시돼요.</p>
+    <div id="notepadContainer"></div>
+  </div>
+</div>
+
+<div class="overlay" id="suggestOverlay">
+  <div class="modal">
+    <span class="close-x" onclick="closeOverlay('suggestOverlay')">✖</span>
+    <h2>🔍 제안하기</h2>
+    <p>현재 위치: <b id="suggestRoomName"></b></p>
+    <div class="section-title">누가?</div>
+    <div class="pick-grid" id="suggestSuspectGrid"></div>
+    <div class="section-title">무엇에 담아?</div>
+    <div class="pick-grid" id="suggestItemGrid"></div>
+    <div class="row" style="margin-top:14px;">
+      <button class="btn orange" onclick="submitSuggestion()">제안 발표!</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="accuseOverlay">
+  <div class="modal">
+    <span class="close-x" onclick="closeOverlay('accuseOverlay')">✖</span>
+    <h2>🚨 최종 고발</h2>
+    <p style="color:var(--danger);">틀리면 더이상 이동하거나 제안할 수 없어요! 신중하게 고르세요.</p>
+    <div class="section-title">누가?</div>
+    <div class="pick-grid" id="accuseSuspectGrid"></div>
+    <div class="section-title">무엇에 담아?</div>
+    <div class="pick-grid" id="accuseItemGrid"></div>
+    <div class="section-title">어디에 숨겼나?</div>
+    <div class="pick-grid" id="accuseRoomGrid"></div>
+    <div class="row" style="margin-top:14px;">
+      <button class="btn orange" onclick="submitAccusation()">고발한다!</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="revealChoiceOverlay">
+  <div class="modal">
+    <h2 id="revealChoiceTitle">카드를 보여주세요</h2>
+    <div class="pick-grid" id="revealChoiceGrid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="revealShowOverlay">
+  <div class="modal pass-screen-content">
+    <h2 id="revealShowTitle">-</h2>
+    <div class="big-emoji" id="revealShowCard">-</div>
+    <button class="btn orange" onclick="closeOverlay('revealShowOverlay')">확인!</button>
+  </div>
+</div>
+
+<div class="overlay" id="howtoOverlay">
+  <div class="modal" style="max-width:640px;">
+    <span class="close-x" onclick="closeOverlay('howtoOverlay')">✖</span>
+    <h2>📖 게임 방법</h2>
+    <div class="section-title">🎯 목표</div>
+    <p>학교에서 키링을 훔쳐간 <b>범인(용의자)</b>, 훔친 <b>물건(무엇에 담았는지)</b>, 그리고 <b>숨긴 장소</b>를 가장 먼저 알아내면 승리해요!</p>
+    <div class="section-title">🎲 내 차례에 할 수 있는 것</div>
+    <p>1. 주사위 2개를 굴려서 나온 수만큼 복도 칸을 따라 이동해요. (대각선 이동은 안 돼요)<br>
+    2. 방은 <b>노란색 문 칸</b>을 통해서만 드나들 수 있고, 방에 들어가면 그 자리에서 이동이 끝나요. 한가운데 🔒 비밀 금고실에도 문 4개가 있어요.<br>
+    3. 방에 도착하면 <b>제안하기</b>로 "OO가 OO에 담아 여기 숨겼다!"라고 추리를 발표할 수 있어요.<br>
+    4. 네 모서리 방(📚도서관↔🎤강당, 🎨미술실↔🍚급식실)은 <b>비밀통로</b>로 주사위 없이 바로 이동할 수 있어요.<br>
+    5. 복도 한 칸에는 한 명만 설 수 있고, 다른 사람이 있는 칸은 지나갈 수 없어요.</p>
+    <div class="section-title">🔍 제안하고 반증받기</div>
+    <p>제안을 하면 다음 사람부터 차례로, 제안한 용의자·물건·장소 카드 중 하나라도 갖고 있으면 나에게만 몰래 보여줘요. 아무도 보여줄 카드가 없으면 그 제안이 정답일 수도 있어요!</p>
+    <p>제안에 이름이 불린 <b>용의자 말은 그 방으로 끌려와요.</b> 끌려온 사람은 자기 차례에 주사위를 굴리지 않고 그 방에서 바로 제안할 수 있어요.</p>
+    <div class="section-title">📝 메모장</div>
+    <p>다른 사람이 보여준 카드나 내가 가진 카드를 메모장에 체크해두면, 범인이 아닌 카드를 하나씩 지워나가며 추리할 수 있어요.</p>
+    <div class="section-title">🚨 최종 고발</div>
+    <p>확신이 서면 보드 한가운데 <b>🔒 비밀 금고실</b>로 들어가야만 최종 고발(기밀 봉투 확인)을 할 수 있어요. 금고실은 장소 카드가 아니라서 그곳에서는 제안을 할 수 없고, 고발만 할 수 있어요. 정답이면 바로 승리! 틀리면 더 이상 이동하거나 제안할 수 없지만, 다른 사람의 반증은 계속 도와줘야 해요.</p>
+    <div class="section-title">❓ 보너스카드</div>
+    <p>2013년 한국판 클루의 실제 보너스카드를 반영했어요. 총 13장 덱(6종 x 2장 + 아래 마지막 카드 1장)에서 뽑고, 다 쓰면 버림더미를 다시 섞어서 사용해요. 아래 상황에서 얻을 수 있어요:</p>
+    <p>1. 복도의 분홍색 <b>❓ 칸</b>을 밟으면 무작위로 한 장 얻어요. (한 번 쓰인 칸은 잠시 ⏳ 쉬었다가 다시 열려요)<br>
+    2. 다른 사람의 제안 때문에 내 말이 다른 방으로 끌려왔을 때, 원한다면 한 장 뽑을 수 있어요.</p>
+    <p style="font-size:0.9rem;">
+      🔁 <b>차례를 한 번 더</b> — 지금 쓰거나 필요할 때 써서, 턴이 끝나도 한 번 더 진행해요.<br>
+      🔍 <b>한 번 더 추리</b> — 말을 옮기지 않고 원하는 장소·사람·도구로 바로 추리해요.<br>
+      🎲 <b>주사위 +6</b> — 나온 주사위 값에 6을 더해요.<br>
+      📣 <b>카드 공개 지목</b> — 한 사람을 지목하면, 그 사람이 자기 카드 중 한 장을 골라 모두에게 공개해요.<br>
+      🚪 <b>원하는 장소로 이동</b> — 주사위 없이 원하는 곳으로 바로 이동해요.<br>
+      👀 <b>카드 엿보기</b> — 다른 두 사람이 반증으로 카드를 보여줄 때, 그 카드를 몰래 함께 봐요.<br>
+      ⚖️ <b>바로 최종 고발</b> — 비밀 금고실에 가지 않아도 지금 바로 최종 고발을 할 수 있어요. (덱에 1장뿐이에요!)
+    </p>
+    <div class="row" style="margin-top:14px; justify-content:center;">
+      <button class="btn orange" onclick="closeOverlay('howtoOverlay')">알겠어요!</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="infoOverlay">
+  <div class="modal pass-screen-content">
+    <div class="big-emoji" id="infoEmoji">ℹ️</div>
+    <p id="infoText">-</p>
+    <button class="btn orange" onclick="closeOverlay('infoOverlay')">확인</button>
+  </div>
+</div>
+
+<div class="overlay" id="winOverlay">
+  <div class="modal win-box">
+    <div class="big-emoji" id="winEmoji">🎉</div>
+    <h2 id="winTitle">-</h2>
+    <p id="winSubtitle"></p>
+    <div class="solution-reveal" id="winSolution"></div>
+    <button class="btn orange" onclick="location.reload()">다시 하기</button>
+  </div>
+</div>
+
+<div id="roomInfo"></div>
+
+<!-- ===================== 채팅 (온라인 모드에서만 노출) ===================== -->
+<button id="chat-toggle-btn" class="chat-toggle-btn hidden" onclick="toggleChat()" title="채팅">
+  💬<span id="chat-badge" class="chat-badge hidden">0</span>
+</button>
+<div id="chat-widget" class="chat-widget hidden">
+  <div class="chat-header"><span>💬 채팅</span><button onclick="toggleChat()">✕ 닫기</button></div>
+  <div id="chat-messages" class="chat-messages"></div>
+  <div id="chat-hint" class="chat-hint hidden"></div>
+  <div class="chat-input-row">
+    <input id="chat-input" placeholder="메시지 입력..." maxlength="150" onkeydown="if(event.key==='Enter'){sendChatMessage();}">
+    <button class="btn small" onclick="sendChatMessage()">보내기</button>
+  </div>
+</div>
+
+<script>
+// ===================== 게임 데이터 =====================
+
+const SUSPECTS = [
+  {id:'suspect_jiwoo', name:'지우', emoji:'🧒', color:'#ff6b6b'},
+  {id:'suspect_minjun', name:'민준', emoji:'👦', color:'#4d96ff'},
+  {id:'suspect_seoyeon', name:'서연', emoji:'👧', color:'#ffd93d'},
+  {id:'suspect_hajun', name:'하준', emoji:'🧑', color:'#6bcb77'},
+  {id:'suspect_yujin', name:'유진', emoji:'👩‍🦱', color:'#b980f0'},
+  {id:'suspect_doyoon', name:'도윤', emoji:'🧑‍🦱', color:'#8d8d8d'},
+];
+
+const ITEMS = [
+  {id:'item_backpack', name:'책가방', emoji:'🎒'},
+  {id:'item_locker', name:'사물함 열쇠', emoji:'🔐'},
+  {id:'item_lunchbag', name:'도시락 가방', emoji:'🍱'},
+  {id:'item_umbrella', name:'우산', emoji:'☂️'},
+  {id:'item_shoebag', name:'신발주머니', emoji:'👟'},
+  {id:'item_gymbag', name:'체육복 가방', emoji:'🩳'},
+];
+
+// ===================== 보너스카드 (2013년 한국판 클루의 실제 "보너스 카드" 문구를 그대로 반영) =====================
+// 실물 카드 사진에서 확인된 6종. 13장 중 각 종류별 매수는 확인되지 않아, 동일 확률로 무작위 지급해요.
+const BONUS_CARDS = [
+  {id:'bonus_extra_turn',  name:'차례를 한 번 더',   emoji:'🔁', desc:'차례를 한 번 더 진행합니다. 지금 사용하거나 필요할 때 사용합니다.'},
+  {id:'bonus_free_suggest',name:'한 번 더 추리',     emoji:'🔍', desc:'자기 말이나 다른 사람의 말을 이동하지 않고, 원하는 장소·사람·도구를 정해 추리할 수 있습니다. 지금 사용합니다.'},
+  {id:'bonus_plus6',       name:'주사위 +6',        emoji:'🎲', desc:'나온 주사위에 6을 더할 수 있습니다. 지금 사용하거나 필요할 때 사용합니다.'},
+  {id:'bonus_reveal',      name:'카드 공개 지목',    emoji:'📣', desc:'한 사람을 정하면, 그 사람은 자기 카드 중 한 장을 모두에게 보여주어야 합니다. 지금 사용합니다.'},
+  {id:'bonus_teleport',    name:'원하는 장소로 이동',emoji:'🚪', desc:'주사위 없이 원하는 장소로 바로 이동합니다. 지금 사용합니다.'},
+  {id:'bonus_peek_reveal', name:'카드 엿보기',       emoji:'👀', desc:'다른 두 사람이 반증으로 카드를 보여줄 때, 그 카드를 몰래 함께 볼 수 있습니다. 필요할 때 사용합니다.'},
+  {id:'bonus_accuse',      name:'바로 최종 고발',    emoji:'⚖️', desc:'비밀 금고실까지 가지 않아도, 지금 바로 최종 고발(기밀 봉투 확인)을 할 수 있습니다. 지금 사용합니다.'},
+];
+function getBonusCard(id){ return BONUS_CARDS.find(b=>b.id===id); }
+
+// 실제로는 이 보너스카드가 총 13장 들어있는 걸로 보여요. 정확한 장수 구성은 확인되지 않아서,
+// 6종을 2장씩(12장) + '바로 최종 고발' 1장으로 13장을 구성해봤어요 (제 임의 추정치예요).
+const BONUS_DECK_COMPOSITION = {
+  bonus_extra_turn:2, bonus_free_suggest:2, bonus_plus6:2,
+  bonus_reveal:2, bonus_teleport:2, bonus_peek_reveal:2,
+  bonus_accuse:1,
+};
+function shuffleArray(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
+}
+function buildBonusDeck(){
+  const deck=[];
+  Object.entries(BONUS_DECK_COMPOSITION).forEach(([id,n])=>{ for(let i=0;i<n;i++) deck.push(id); });
+  return shuffleArray(deck);
+}
+// 덱에서 한 장을 뽑아요. 덱이 비면 그동안 사용한 카드(버림더미)를 다시 섞어서 덱으로 만들어요.
+function drawBonusCardFromDeck(){
+  if(!state.bonusDeck) state.bonusDeck=[];
+  if(!state.bonusDiscard) state.bonusDiscard=[];
+  if(state.bonusDeck.length===0){
+    if(state.bonusDiscard.length>0){
+      state.bonusDeck = shuffleArray(state.bonusDiscard.slice());
+      state.bonusDiscard = [];
+    } else {
+      state.bonusDeck = buildBonusDeck();
+    }
+  }
+  return state.bonusDeck.shift();
+}
+
+// ===================== 보드 (원작 클루 스타일: 24x25 칸) =====================
+const GRID_COLS = 24, GRID_ROWS = 25, CELL = 24;
+
+// 방 9개는 보드 둘레에 배치. c,r=왼쪽위 칸 / w,h=칸 개수 / doors=방과 붙은 복도 칸(출입문)
+const ROOMS = [
+  {id:'room_library',   name:'도서관', emoji:'📚', c:0,  r:0,  w:6, h:5, doors:[[6,3],[3,5]]},
+  {id:'room_music',     name:'음악실', emoji:'🎵', c:9,  r:0,  w:6, h:7, doors:[[8,3],[15,3],[9,7],[12,7]]},
+  {id:'room_art',       name:'미술실', emoji:'🎨', c:17, r:0,  w:7, h:6, doors:[[16,2],[17,6]]},
+  {id:'room_broadcast', name:'방송실', emoji:'📻', c:0,  r:7,  w:7, h:5, doors:[[7,8],[3,12]]},
+  {id:'room_nurse',     name:'보건실', emoji:'🩹', c:16, r:9,  w:8, h:7, doors:[[15,10],[18,16]]},
+  {id:'room_science',   name:'과학실', emoji:'🔬', c:0,  r:13, w:6, h:5, doors:[[6,15],[2,18]]},
+  {id:'room_cafeteria', name:'급식실', emoji:'🍚', c:0,  r:20, w:6, h:5, doors:[[2,19],[6,21]]},
+  {id:'room_playground',name:'운동장', emoji:'⚽', c:8,  r:18, w:8, h:7, doors:[[10,17],[13,17],[7,20],[16,20]]},
+  {id:'room_hall',      name:'강당',   emoji:'🎤', c:18, r:19, w:6, h:6, doors:[[20,18],[17,21]]},
+];
+
+// 보드 한가운데 '비밀 금고실' - 기밀 봉투가 있는 곳. 최종 고발은 여기 들어와야만 할 수 있어요.
+// (장소 카드에는 들어가지 않으므로 ROOMS 목록과는 따로 둡니다)
+const VAULT_ID = 'room_vault';
+const VAULT = {id:VAULT_ID, name:'비밀 금고실', emoji:'🔒', c:8, r:9, w:6, h:7,
+               doors:[[10,8],[7,12],[14,12],[11,16]]};
+
+// 보드에 실제로 그려지고 말이 들어갈 수 있는 모든 방 (= 카드용 9개 + 비밀 금고실)
+const PLACES = ROOMS.concat([VAULT]);
+
+// 비밀통로 (대각선 코너방끼리, 주사위 없이 한번에 이동)
+const SECRET_PASSAGES = {
+  'room_library': 'room_hall',
+  'room_hall': 'room_library',
+  'room_art': 'room_cafeteria',
+  'room_cafeteria': 'room_art',
+};
+
+function cellId(c,r){ return 'c'+c+'_'+r; }
+function rectHas(rect,c,r){ return c>=rect.c && c<rect.c+rect.w && r>=rect.r && r<rect.r+rect.h; }
+function roomAt(c,r){ return PLACES.find(rm=>rectHas(rm,c,r)) || null; }
+function isBlocked(c,r){ return !!roomAt(c,r); }
+
+// 그래프: 복도 칸 + 방 노드
+function buildGraph(){
+  const nodes = {}, edges = {};
+  PLACES.forEach(rm=>{ nodes[rm.id] = {type:'room', ...rm}; edges[rm.id] = []; });
+  for(let r=0;r<GRID_ROWS;r++){
+    for(let c=0;c<GRID_COLS;c++){
+      if(isBlocked(c,r)) continue;
+      const id = cellId(c,r);
+      nodes[id] = {type:'cell', id, c, r};
+      edges[id] = [];
+    }
+  }
+  // 복도끼리 상하좌우 연결 (대각선 이동 없음)
+  Object.values(nodes).forEach(n=>{
+    if(n.type!=='cell') return;
+    [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dc,dr])=>{
+      const nc = n.c+dc, nr = n.r+dr;
+      if(nc<0||nr<0||nc>=GRID_COLS||nr>=GRID_ROWS) return;
+      if(isBlocked(nc,nr)) return;
+      edges[n.id].push(cellId(nc,nr));
+    });
+  });
+  // 문: 복도 칸 <-> 방 (방은 오직 문으로만 드나듦)
+  PLACES.forEach(rm=>{
+    rm.doors.forEach(([dc,dr])=>{
+      const id = cellId(dc,dr);
+      if(!nodes[id]){ console.warn('문 위치 오류:', rm.id, dc, dr); return; }
+      edges[id].push(rm.id);
+      edges[rm.id].push(id);
+    });
+  });
+  return {nodes, edges};
+}
+const GRAPH = buildGraph();
+
+const DOOR_CELLS = {};
+PLACES.forEach(rm=> rm.doors.forEach(([c,r])=> DOOR_CELLS[cellId(c,r)] = rm.id));
+
+// 보너스 칸: 복도 위에 흩어진 분홍색 칸. 밟으면 보너스카드를 한 장 얻어요.
+// (문 칸이나 방 칸과 겹치지 않는 빈 복도 좌표로 선정)
+const BONUS_TILES = [
+  cellId(7,5), cellId(19,7), cellId(7,14), cellId(20,16), cellId(16,17), cellId(7,22)
+];
+const BONUS_TILE_COOLDOWN_TURNS = 4; // 한 번 쓰인 칸은 이만큼의 턴 동안 다시 쓸 수 없어요
+
+// 출발 지점: 원작처럼 보드 가장자리 복도 칸
+const STARTING_SPOTS = {
+  'suspect_jiwoo':  cellId(7,0),
+  'suspect_minjun': cellId(15,0),
+  'suspect_seoyeon':cellId(23,7),
+  'suspect_hajun':  cellId(23,17),
+  'suspect_yujin':  cellId(0,18),
+  'suspect_doyoon': cellId(0,6),
+};
+
+function getSuspect(id){ return SUSPECTS.find(s=>s.id===id); }
+function getItem(id){ return ITEMS.find(i=>i.id===id); }
+function getRoom(id){ return PLACES.find(r=>r.id===id); }
+function getCardLabel(cardId){
+  const s = getSuspect(cardId); if(s) return s.emoji+' '+s.name;
+  const i = getItem(cardId); if(i) return i.emoji+' '+i.name;
+  const r = getRoom(cardId); if(r) return r.emoji+' '+r.name;
+  return cardId;
+}
+
+</script>
+<script>
+// ===================== Firebase 설정 (온라인 모드용) =====================
+// 👉 아래에 본인의 Firebase 프로젝트 설정을 넣어주세요! (Realtime Database 사용)
+const firebaseConfig = {
+  apiKey: "AIzaSyDcNfZC08ZUHYSzoCorkEDgM4wp3ErBuUY",
+  authDomain: "clue-6ce8b.firebaseapp.com",
+  databaseURL: "https://clue-6ce8b-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clue-6ce8b",
+  storageBucket: "clue-6ce8b.firebasestorage.app",
+  messagingSenderId: "828831866569",
+  appId: "1:828831866569:web:aa96ce32254dfc8ba33718"
+};
+let fbApp = null, fbDb = null, fbInitialized = false;
+function initFirebase(){
+  if(fbInitialized) return true;
+  try{
+    fbApp = firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.database();
+    fbInitialized = true;
+    attachConnectionWatchers();
+    return true;
+  }catch(e){
+    console.error('Firebase 초기화 실패', e);
+    return false;
+  }
+}
+
+// ===================== 온라인 연결 안정성 (끊김 감지 / 핑 / 방장 이양 / 자동 재접속) =====================
+let connWatcherAttached = false;
+let pingTimer = null;
+let peerMonitorTimer = null;
+let connBannerState = {self:null, peer:null};
+let presenceRaw = {};        // uid -> {connected, lastSeen, pingMs, name}
+let presenceUnsub = null;
+let serverTimeOffset = 0;
+const PING_INTERVAL_MS = 2500;
+const STALE_MS = 7000;       // 이 시간 동안 하트비트가 없으면 연결 끊김으로 간주
+const ACTIVE_ROOM_KEY = 'clue_active_room';
+function serverNow(){ return Date.now() + serverTimeOffset; }
+
+function getPersistentPlayerId(){
+  let id = localStorage.getItem('clue_player_id');
+  if(!id){ id = 'u'+uid4()+uid4(); localStorage.setItem('clue_player_id', id); }
+  return id;
+}
+
+function attachConnectionWatchers(){
+  if(connWatcherAttached) return;
+  connWatcherAttached = true;
+  fbDb.ref('.info/serverTimeOffset').on('value', snap=>{ serverTimeOffset = snap.val()||0; });
+  fbDb.ref('.info/connected').on('value', snap=>{
+    const isConnected = snap.val()===true;
+    if(isConnected){
+      hideConnBanner('self');
+      if(ROOM_CODE && onlinePlayerUid){
+        const myRef = fbDb.ref('rooms/'+ROOM_CODE+'/presence/'+onlinePlayerUid);
+        // onDisconnect 핸들러는 소켓이 끊길 때마다 초기화되므로 (재)연결마다 다시 걸어둔다.
+        myRef.onDisconnect().update({connected:false});
+        myRef.update({connected:true, lastSeen: firebase.database.ServerValue.TIMESTAMP});
+      }
+    } else if(ROOM_CODE){
+      showConnBanner('self', '⚠️ 서버와 연결이 끊겼습니다. 재접속을 시도하는 중...', true);
+    }
+  });
+}
+
+function startPingHeartbeat(){
+  stopPingHeartbeat();
+  const tick=()=>{
+    if(!fbDb || !ROOM_CODE || !onlinePlayerUid) return;
+    const t0 = Date.now();
+    const ref = fbDb.ref('rooms/'+ROOM_CODE+'/presence/'+onlinePlayerUid);
+    ref.update({lastSeen: firebase.database.ServerValue.TIMESTAMP}).then(()=>{
+      const rtt = Date.now()-t0;
+      ref.update({pingMs:rtt, connected:true});
+    }).catch(()=>{});
+  };
+  tick();
+  pingTimer = setInterval(tick, PING_INTERVAL_MS);
+}
+function stopPingHeartbeat(){ if(pingTimer){ clearInterval(pingTimer); pingTimer=null; } }
+
+function isPlayerStale(p){
+  if(!p) return true;
+  if(p.connected===false) return true;
+  if(!p.lastSeen) return false; // 아직 하트비트를 한 번도 안 보낸 경우 바로 끊김 처리하지 않음
+  return (serverNow() - p.lastSeen) > STALE_MS;
+}
+function pingClass(p){
+  if(isPlayerStale(p)) return 'stale';
+  const ms = p && p.pingMs;
+  if(ms==null) return 'stale';
+  if(ms<150) return 'good';
+  if(ms<400) return 'mid';
+  return 'bad';
+}
+
+function showConnBanner(key, text, urgent){
+  connBannerState[key] = {text, urgent};
+  renderConnBanner();
+}
+function hideConnBanner(key){
+  connBannerState[key] = null;
+  renderConnBanner();
+}
+function renderConnBanner(){
+  const el = document.getElementById('connBanner');
+  if(!el) return;
+  const active = connBannerState.self || connBannerState.peer;
+  if(!active){ el.classList.add('hidden'); return; }
+  el.textContent = active.text;
+  el.classList.remove('hidden');
+  el.classList.toggle('urgent', !!active.urgent);
+}
+
+// 현재 방에 있는 사람 목록 (게임 시작 전엔 대기실 명단, 시작 후엔 실제 플레이어 명단)
+function currentRoster(){
+  if(MODE!=='online') return [];
+  if(state && state.players) return state.players.map(p=>({id:p.id, name:p.name}));
+  if(lobbyData && lobbyData.players) return Object.values(lobbyData.players).map(p=>({id:p.id, name:p.name}));
+  return [];
+}
+
+/* 참고용 안내일 뿐: 턴 기반 게임이라 끊긴 상대를 자동으로 내보내지 않고,
+   재접속을 기다리고 있다는 사실만 알려준다. */
+function updateConnBannerFromPeers(){
+  if(MODE!=='online'){ hideConnBanner('peer'); return; }
+  const staleNames = [];
+  currentRoster().forEach(p=>{
+    if(p.id===onlinePlayerUid) return;
+    if(isPlayerStale(presenceRaw[p.id])) staleNames.push(p.name || '참가자');
+  });
+  if(staleNames.length){
+    showConnBanner('peer', `⚠️ ${staleNames.join(', ')}님과의 연결이 불안정합니다. 재접속을 기다리는 중...`, false);
+  } else {
+    hideConnBanner('peer');
+  }
+}
+function updatePingBadge(){
+  document.querySelectorAll('.pingBadgesTarget').forEach(el=>{
+    if(MODE!=='online'){ el.innerHTML=''; return; }
+    el.innerHTML = currentRoster().map(p=>{
+      const pr = presenceRaw[p.id];
+      const cls = pingClass(pr);
+      const msText = cls==='stale' ? '끊김' : (pr && pr.pingMs!=null ? Math.round(pr.pingMs)+'ms' : '--');
+      const me = p.id===onlinePlayerUid ? ' (나)' : '';
+      return `<span class="ping-chip ping-${cls}">${p.name}${me} · ${msText}</span>`;
+    }).join('');
+  });
+}
+function startPeerMonitorUi(){
+  stopPeerMonitorUi();
+  peerMonitorTimer = setInterval(()=>{
+    updateConnBannerFromPeers();
+    updatePingBadge();
+  }, 1000);
+  updateConnBannerFromPeers();
+  updatePingBadge();
+}
+function stopPeerMonitorUi(){
+  if(peerMonitorTimer){ clearInterval(peerMonitorTimer); peerMonitorTimer=null; }
+  hideConnBanner('peer');
+}
+
+function listenPresence(){
+  if(presenceUnsub){ presenceUnsub(); presenceUnsub=null; }
+  const ref = fbDb.ref('rooms/'+ROOM_CODE+'/presence');
+  const handler = ref.on('value', snap=>{
+    presenceRaw = snap.val()||{};
+    maybeReassignHost();
+    updatePingBadge();
+  });
+  presenceUnsub = ()=>ref.off('value', handler);
+}
+
+/* 방장이 나가거나 오래 끊긴 채로 있으면(대기실 단계에서만), 남아있는 사람 중
+   가장 먼저 입장했고 현재 연결되어 있는 사람이 자동으로 방장을 넘겨받는다. */
+function maybeReassignHost(){
+  if(!lobbyData || !lobbyData.players) return;
+  const hostId = lobbyData.hostId;
+  const hostPresence = hostId ? presenceRaw[hostId] : null;
+  if(hostId && !isPlayerStale(hostPresence)) return; // 방장이 멀쩡히 살아있으면 그대로 둔다
+  const players = lobbyData.players;
+  const aliveIds = Object.keys(players)
+    .filter(id=>!isPlayerStale(presenceRaw[id]))
+    .sort((a,b)=>(players[a].joinedAt||0)-(players[b].joinedAt||0));
+  if(aliveIds.length===0) return;
+  const newHostId = aliveIds[0];
+  if(newHostId===onlinePlayerUid && hostId!==onlinePlayerUid){
+    fbDb.ref('rooms/'+ROOM_CODE+'/lobby/hostId').set(onlinePlayerUid);
+  }
+}
+
+/* 세션 복구: 방을 만들거나 참가하면 방 코드를 localStorage에 기억해두고,
+   새로고침되면 같은 기기(내 영구 id)가 그 방의 자리를 아직 갖고 있는 경우 자동 재입장한다. */
+function saveActiveRoom(code){
+  try{ localStorage.setItem(ACTIVE_ROOM_KEY, JSON.stringify({roomCode:code, ts:Date.now()})); }catch(e){}
+}
+function clearActiveRoom(){
+  try{ localStorage.removeItem(ACTIVE_ROOM_KEY); }catch(e){}
+}
+function getSavedActiveRoom(){
+  try{
+    const raw = localStorage.getItem(ACTIVE_ROOM_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    return (parsed && parsed.roomCode) ? parsed : null;
+  }catch(e){ return null; }
+}
+
+function enterOnlineRoom(code){
+  ROOM_CODE = code;
+  saveActiveRoom(code);
+  listenLobby();
+  listenPresence();
+  startPingHeartbeat();
+  startPeerMonitorUi();
+  attachChatListener();
+}
+
+function attemptAutoRejoin(){
+  const saved = getSavedActiveRoom();
+  if(!saved) return;
+  if(!initFirebase()) return;
+  const code = saved.roomCode;
+  const myId = getPersistentPlayerId();
+  fbDb.ref('rooms/'+code).once('value').then(snap=>{
+    const room = snap.val();
+    if(!room){ clearActiveRoom(); return; }
+    const lobbyEntry = room.lobby && room.lobby.players && room.lobby.players[myId];
+    const stateEntry = room.state && room.state.players && room.state.players.find(p=>p.id===myId);
+    if(!lobbyEntry && !stateEntry){ clearActiveRoom(); return; }
+    ROOM_CODE = code;
+    onlinePlayerUid = myId;
+    myPlayerId = myId;
+    MODE = 'online';
+    fbDb.ref('rooms/'+code+'/presence/'+myId).update({
+      connected:true, lastSeen: firebase.database.ServerValue.TIMESTAMP,
+      name: stateEntry ? stateEntry.name : lobbyEntry.name
+    });
+    saveActiveRoom(code);
+    listenLobby();
+    listenPresence();
+    startPingHeartbeat();
+    startPeerMonitorUi();
+    attachChatListener();
+    if(room.state && room.state.started){
+      showScreen('gameScreen');
+      document.getElementById('roomInfo').textContent = '온라인 방 코드: '+ROOM_CODE;
+    } else {
+      showScreen('onlineLobbyScreen');
+      document.getElementById('lobbyRoomCode').textContent = '코드: '+ROOM_CODE;
+    }
+  }).catch(err=>console.warn('자동 재접속 실패:', err));
+}
+
+function leaveOnlineRoom(){
+  stopPingHeartbeat();
+  stopPeerMonitorUi();
+  detachChatListener();
+  hideChatWidget();
+  clearActiveRoom();
+  if(fbDb && ROOM_CODE && onlinePlayerUid){
+    const code = ROOM_CODE;
+    const presRef = fbDb.ref('rooms/'+code+'/presence/'+onlinePlayerUid);
+    presRef.onDisconnect().cancel();
+    presRef.remove().catch(()=>{});
+    fbDb.ref('rooms/'+code+'/lobby/players/'+onlinePlayerUid).remove().catch(()=>{});
+  }
+  if(presenceUnsub){ presenceUnsub(); presenceUnsub=null; }
+  if(fbDb && ROOM_CODE){
+    fbDb.ref('rooms/'+ROOM_CODE+'/lobby').off();
+    fbDb.ref('rooms/'+ROOM_CODE+'/state').off();
+  }
+  hideConnBanner('self'); hideConnBanner('peer');
+  ROOM_CODE = null; lobbyData = null; state = null; MODE = null;
+  showScreen('titleScreen');
+}
+
+// ===================== 채팅 (온라인 모드 전용) =====================
+const PROFANITY_LIST = [
+  '시발','씨발','씨팔','시팔','ㅅㅂ','개새끼','개색기','새꺄','병신','ㅂㅅ','좆','좇',
+  '존나','존내','걸레','창녀','미친놈','미친년','지랄','닥쳐','꺼져','뒤져','죽어라',
+  '한남충','한녀충','틀딱','급식충','맘충','fuck','fucking','shit','bitch','asshole',
+  'bastard','nigger','retard'
+];
+/* 추리 게임 특성상 채팅으로 자기 카드(용의자/물건/장소)를 언급하면 반칙이 되므로,
+   카드 이름도 욕설과 같은 방식으로 채팅에서 자동으로 가린다. */
+const CARD_NAME_LIST = [].concat(
+  SUSPECTS.map(s=>s.name),
+  ITEMS.map(i=>i.name),
+  ROOMS.map(r=>r.name)
+);
+const CHAT_MAX_LEN = 150;
+const CHAT_COOLDOWN_MS = 1200;     // 최소 이 시간 간격으로만 전송 가능 (도배 방지)
+const CHAT_DUP_WINDOW_MS = 15000;  // 같은 메시지를 이 시간 안에 반복 전송 금지
+let lastChatSendAt = 0;
+let lastChatSentText = '';
+let chatQueryRef = null;
+let chatUnsub = null;
+let chatOpen = false;
+let chatUnreadCount = 0;
+
+function showChatHint(msg){
+  const hint = document.getElementById('chat-hint');
+  if(!hint) return;
+  hint.textContent = msg;
+  hint.classList.remove('hidden');
+  clearTimeout(showChatHint._t);
+  showChatHint._t = setTimeout(()=>hint.classList.add('hidden'), 1600);
+}
+/* 같은 글자를 8번 넘게 반복하면("ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ") 8개로 줄인다. */
+function collapseRepeatedChars(text){
+  return text.replace(/(.)\1{7,}/g, (m, ch) => ch.repeat(8));
+}
+/* 공백/구두점을 넣어 우회하는 걸 어느 정도 잡아내기 위해, 원문 위치를 기억해두는
+   "축약본"을 만들어서 검사한 뒤, 걸린 부분만 원문 위치 그대로 *로 치환한다.
+   욕설(matchedProfanity)과 카드 이름(matchedCard)을 구분해서 반환한다. */
+function filterProfanity(text){
+  const ignoreChars = /[\s.,!?~^*\-_'"]/;
+  let stripped = '';
+  const idxMap = [];
+  for(let i=0;i<text.length;i++){
+    if(!ignoreChars.test(text[i])){ stripped += text[i]; idxMap.push(i); }
+  }
+  const strippedLower = stripped.toLowerCase();
+  const chars = text.split('');
+  let matchedProfanity = false, matchedCard = false;
+  function maskAll(list, onMatch){
+    for(const word of list){
+      const w = word.toLowerCase();
+      if(!w) continue;
+      let from = 0, pos;
+      while((pos = strippedLower.indexOf(w, from)) !== -1){
+        onMatch();
+        for(let k=0;k<w.length;k++) chars[idxMap[pos+k]] = '*';
+        from = pos + w.length;
+      }
+    }
+  }
+  maskAll(PROFANITY_LIST, ()=>{ matchedProfanity = true; });
+  maskAll(CARD_NAME_LIST, ()=>{ matchedCard = true; });
+  return { text: chars.join(''), matched: matchedProfanity||matchedCard, matchedProfanity, matchedCard };
+}
+/* 자음(초성)만으로 이루어진 메시지 여부 검사: "ㅋㅋㅋ", "ㅎㅎㅎ", "ㅅㅂ", "ㅂㅅ" 처럼
+   받침/모음 없이 자음 낱자만 나열한 메시지는 (재미로 쓰는 것 포함) 전부 막는다. */
+function isConsonantOnly(text){
+  const stripped = text.replace(/\s+/g, '');
+  if(!stripped) return false;
+  if(/^[ㅋㅎ]+$/.test(stripped)) return false; // ㅋㅋㅋ / ㅎㅎㅎ 웃음 표현은 예외로 허용
+  return /^[\u3131-\u314e]+$/.test(stripped);
+}
+function showChatWidget(){
+  document.getElementById('chat-toggle-btn').classList.remove('hidden');
+}
+function hideChatWidget(){
+  document.getElementById('chat-toggle-btn').classList.add('hidden');
+  document.getElementById('chat-widget').classList.add('hidden');
+  chatOpen = false;
+  chatUnreadCount = 0;
+}
+function updateChatBadge(){
+  const badge = document.getElementById('chat-badge');
+  if(!badge) return;
+  if(chatUnreadCount>0){ badge.textContent = chatUnreadCount>9?'9+':chatUnreadCount; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+}
+function toggleChat(){
+  chatOpen = !chatOpen;
+  document.getElementById('chat-widget').classList.toggle('hidden', !chatOpen);
+  if(chatOpen){
+    chatUnreadCount = 0;
+    updateChatBadge();
+    const box = document.getElementById('chat-messages');
+    box.scrollTop = box.scrollHeight;
+    document.getElementById('chat-input').focus();
+  }
+}
+// 지금 이 기기의 플레이어 이름 (대기실 단계면 lobbyData에서, 게임 시작 후면 state에서 찾는다)
+function myOnlineName(){
+  if(state && state.players){
+    const p = state.players.find(pl=>pl.id===onlinePlayerUid);
+    if(p) return p.name;
+  }
+  if(lobbyData && lobbyData.players && lobbyData.players[onlinePlayerUid]){
+    return lobbyData.players[onlinePlayerUid].name;
+  }
+  return '나';
+}
+function renderChatMessages(list){
+  const box = document.getElementById('chat-messages');
+  if(!box) return;
+  box.innerHTML = list.map(m=>{
+    if(!m) return '';
+    const mineClass = m.uid===onlinePlayerUid ? ' mine' : '';
+    const safeText = filterProfanity(String(m.text||'')).text;
+    return `<div class="chat-msg${mineClass}"><span class="who">${escapeHtml(m.name||'??')}</span>${escapeHtml(safeText)}</div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+/* 최근 50개까지만 구독한다. */
+function attachChatListener(){
+  if(!fbDb || !ROOM_CODE) return;
+  detachChatListener();
+  showChatWidget();
+  lastChatSendAt = 0;
+  lastChatSentText = '';
+  chatQueryRef = fbDb.ref('rooms/'+ROOM_CODE+'/chat').limitToLast(50);
+  let firstLoad = true;
+  chatUnsub = chatQueryRef.on('value', snap=>{
+    const val = snap.val() || {};
+    const keys = Object.keys(val).sort(); // push key는 시간순으로 정렬된다
+    renderChatMessages(keys.map(k=>val[k]));
+    if(!firstLoad && !chatOpen){
+      chatUnreadCount++;
+      updateChatBadge();
+    }
+    firstLoad = false;
+  });
+}
+function detachChatListener(){
+  if(chatQueryRef && chatUnsub) chatQueryRef.off('value', chatUnsub);
+  chatQueryRef = null;
+  chatUnsub = null;
+}
+function sendChatMessage(){
+  const input = document.getElementById('chat-input');
+  let text = input.value.trim();
+  if(!text || MODE!=='online' || !fbDb || !ROOM_CODE) return;
+
+  if(isConsonantOnly(text)){
+    showChatHint('🔤 초성만으로는 메시지를 보낼 수 없어요');
+    return;
+  }
+
+  const now = Date.now();
+  if(now - lastChatSendAt < CHAT_COOLDOWN_MS){
+    showChatHint('⏱️ 너무 빨라요! 잠시 후 다시 보내주세요');
+    return;
+  }
+  if(text===lastChatSentText && (now-lastChatSendAt) < CHAT_DUP_WINDOW_MS){
+    showChatHint('🔁 같은 메시지는 잠시 후에 다시 보낼 수 있어요');
+    return;
+  }
+
+  text = collapseRepeatedChars(text).slice(0, CHAT_MAX_LEN);
+  const { text: masked, matched, matchedProfanity, matchedCard } = filterProfanity(text);
+  text = masked;
+
+  lastChatSendAt = now;
+  lastChatSentText = text;
+  if(matchedCard) showChatHint('🃏 카드 이름은 채팅에 쓸 수 없어요 (추리에 필요한 비밀이에요!)');
+  else if(matchedProfanity) showChatHint('⚠️ 부적절한 표현은 별표로 가려졌어요');
+
+  fbDb.ref('rooms/'+ROOM_CODE+'/chat').push({
+    uid: onlinePlayerUid, name: myOnlineName(), text, ts: firebase.database.ServerValue.TIMESTAMP
+  });
+  input.value = '';
+}
+
+// ===================== 전역 상태 =====================
+let MODE = null;           // 'local' | 'online'
+let myPlayerId = null;     // 현재 조작 주체 (local: 턴마다 바뀜 / online: 고정)
+let ROOM_CODE = null;
+let state = null;          // 게임 상태 객체
+let localSuspectPick = null;
+let onlinePlayerUid = null;
+let notes = {}; // 개인 메모장 (로컬 저장, 서버 동기화 안함)
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function openOverlay(id){ document.getElementById(id).classList.add('active'); }
+function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
+function showInfo(text, emoji){
+  document.getElementById('infoText').textContent = text;
+  document.getElementById('infoEmoji').textContent = emoji || 'ℹ️';
+  openOverlay('infoOverlay');
+}
+function uid4(){ return Math.random().toString(36).slice(2,8); }
+/* 플레이어 이름/채팅 메시지는 다른 사람이 자유 입력한 값이라, innerHTML에 넣기 전에는 반드시 이걸 거쳐야 한다. */
+function escapeHtml(str){
+  return String(str==null ? '' : str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
+function genRoomCode(){ return Math.floor(100000+Math.random()*900000).toString(); }
+
+function goSetup(mode){
+  MODE = mode;
+  if(mode==='local'){ showScreen('localSetupScreen'); renderLocalPlayerInputs(); }
+  else { showScreen('onlineSetupScreen'); }
+}
+
+// ===================== LOCAL SETUP =====================
+function renderLocalPlayerInputs(){
+  const n = parseInt(document.getElementById('localPlayerCount').value);
+  const wrap = document.getElementById('localPlayerInputs');
+  wrap.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const row = document.createElement('div');
+    row.className='player-row';
+    row.innerHTML = `<span>${i+1}번</span>
+      <input type="text" id="localName_${i}" placeholder="이름" value="플레이어${i+1}" style="width:110px;">`;
+    wrap.appendChild(row);
+  }
+}
+
+function shuffleArr(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+
+function startLocalGame(){
+  const n = parseInt(document.getElementById('localPlayerCount').value);
+  const shuffledSuspects = shuffleArr(SUSPECTS);
+  const players = [];
+  for(let i=0;i<n;i++){
+    const name = document.getElementById('localName_'+i).value || ('플레이어'+(i+1));
+    players.push({id:'p'+i, name, suspectId:shuffledSuspects[i].id, active:true});
+  }
+  state = initGameCommon(players);
+  myPlayerId = state.turnOrder[0];
+  showScreen('gameScreen');
+  document.getElementById('roomInfo').textContent = '로컬 모드 - '+n+'명';
+  passGateThenRender('게임 시작!');
+}
+
+// ===================== ONLINE SETUP =====================
+function switchOnlineTab(tab){
+  document.getElementById('tabCreateBtn').classList.toggle('active', tab==='create');
+  document.getElementById('tabJoinBtn').classList.toggle('active', tab==='join');
+  document.getElementById('tabCreate').classList.toggle('active', tab==='create');
+  document.getElementById('tabJoin').classList.toggle('active', tab==='join');
+}
+
+function createOnlineRoom(){
+  if(!initFirebase()){ document.getElementById('onlineSetupMsg').textContent='Firebase 설정을 먼저 입력해주세요 (코드 상단 firebaseConfig).'; return; }
+  const name = document.getElementById('createNickname').value.trim() || '방장';
+  const code = genRoomCode();
+  onlinePlayerUid = getPersistentPlayerId();
+  myPlayerId = onlinePlayerUid;
+  const lobby = {
+    hostId: onlinePlayerUid,
+    phase: 'lobby',
+    players: {
+      [onlinePlayerUid]: {id:onlinePlayerUid, name, suspectId:null, ready:false, joinedAt: firebase.database.ServerValue.TIMESTAMP}
+    }
+  };
+  fbDb.ref('rooms/'+code+'/lobby').set(lobby).then(()=>{
+    enterOnlineRoom(code);
+    showScreen('onlineLobbyScreen');
+    document.getElementById('lobbyRoomCode').textContent = '코드: '+ROOM_CODE;
+  });
+}
+
+function joinOnlineRoom(){
+  if(!initFirebase()){ document.getElementById('onlineSetupMsg').textContent='Firebase 설정을 먼저 입력해주세요 (코드 상단 firebaseConfig).'; return; }
+  const name = document.getElementById('joinNickname').value.trim() || '참가자';
+  const code = document.getElementById('joinCode').value.trim();
+  onlinePlayerUid = getPersistentPlayerId();
+  myPlayerId = onlinePlayerUid;
+  fbDb.ref('rooms/'+code+'/lobby').once('value').then(snap=>{
+    if(!snap.exists()){
+      document.getElementById('onlineSetupMsg').textContent = '방을 찾을 수 없어요. 코드를 확인해주세요.';
+      return;
+    }
+    const lobbyVal = snap.val();
+    const existing = lobbyVal.players && lobbyVal.players[onlinePlayerUid];
+    fbDb.ref('rooms/'+code+'/lobby/players/'+onlinePlayerUid).set({
+      id:onlinePlayerUid, name, suspectId:null, ready:false,
+      joinedAt: existing && existing.joinedAt ? existing.joinedAt : firebase.database.ServerValue.TIMESTAMP
+    }).then(()=>{
+      enterOnlineRoom(code);
+      showScreen('onlineLobbyScreen');
+      document.getElementById('lobbyRoomCode').textContent = '코드: '+ROOM_CODE;
+    });
+  });
+}
+
+let lobbyData = null;
+function listenLobby(){
+  fbDb.ref('rooms/'+ROOM_CODE+'/lobby').on('value', snap=>{
+    lobbyData = snap.val();
+    if(!lobbyData) return;
+    renderLobby();
+  });
+  fbDb.ref('rooms/'+ROOM_CODE+'/state').on('value', snap=>{
+    const s = snap.val();
+    if(s && s.started){
+      state = s;
+      if(document.getElementById('gameScreen').classList.contains('active')===false){
+        showScreen('gameScreen');
+        document.getElementById('roomInfo').textContent = '온라인 방 코드: '+ROOM_CODE;
+      }
+      render();
+    }
+  });
+}
+
+function renderLobby(){
+  const wrap = document.getElementById('lobbyPlayerList');
+  wrap.innerHTML='';
+  const players = Object.values(lobbyData.players||{});
+  players.forEach(p=>{
+    const row = document.createElement('div');
+    row.className='player-row';
+    row.innerHTML = `<b>${p.name}</b> ${p.ready?'✅':'⏳'}`;
+    wrap.appendChild(row);
+  });
+  document.getElementById('lobbyStartBtn').style.display = (lobbyData.hostId===onlinePlayerUid) ? 'inline-block':'none';
+}
+
+function toggleReady(){
+  const mine = lobbyData.players[onlinePlayerUid];
+  fbDb.ref('rooms/'+ROOM_CODE+'/lobby/players/'+onlinePlayerUid+'/ready').set(!(mine&&mine.ready));
+}
+
+function hostStartOnlineGame(){
+  const players = Object.values(lobbyData.players||{});
+  if(players.length<2){ showInfo('최소 2명이 필요해요!','😅'); return; }
+  if(players.some(p=>!p.ready)){ showInfo('아직 준비되지 않은 친구가 있어요!','⏳'); return; }
+  const shuffledSuspects = shuffleArr(SUSPECTS);
+  const gPlayers = players.map((p,i)=>({id:p.id, name:p.name, suspectId:shuffledSuspects[i].id, active:true}));
+  const s = initGameCommon(gPlayers);
+  s.started = true;
+  fbDb.ref('rooms/'+ROOM_CODE+'/state').set(s);
+}
+
+// ===================== 게임 초기화 (공통) =====================
+function initGameCommon(players){
+  // 셔플 함수
+  function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+
+  const solutionSuspect = shuffle(SUSPECTS)[0].id;
+  const solutionItem = shuffle(ITEMS)[0].id;
+  const solutionRoom = shuffle(ROOMS)[0].id;
+
+  let deck = [];
+  SUSPECTS.forEach(s=>{ if(s.id!==solutionSuspect) deck.push(s.id); });
+  ITEMS.forEach(i=>{ if(i.id!==solutionItem) deck.push(i.id); });
+  ROOMS.forEach(r=>{ if(r.id!==solutionRoom) deck.push(r.id); });
+  deck = shuffle(deck);
+
+  const hands = {};
+  players.forEach(p=> hands[p.id]=[]);
+  let idx=0;
+  deck.forEach(card=>{
+    hands[players[idx % players.length].id].push(card);
+    idx++;
+  });
+
+  const positions = {};
+  SUSPECTS.forEach(s=> positions[s.id] = STARTING_SPOTS[s.id]);
+
+  const bonusHands = {};
+  players.forEach(p=> bonusHands[p.id]=[]);
+
+  return {
+    started:true,
+    mode: MODE,
+    players,
+    hands,
+    solution:{suspect:solutionSuspect, item:solutionItem, room:solutionRoom},
+    positions,
+    turnOrder: players.map(p=>p.id),
+    turnIndex: 0,
+    phase: 'awaitRoll', // awaitRoll -> moving -> inRoom -> ended
+    lastRoll: null,
+    lastDice: null,
+    movedBySuggestion: null,
+    log: ['🔎 사건 발생! 학교 어딘가에서 소중한 키링이 사라졌습니다...'],
+    pendingSuggestion: null,
+    pendingAccusation: null,
+    winnerId: null,
+    winReason: null,
+    bonusHands,              // playerId -> [cardId, ...]
+    bonusDeck: buildBonusDeck(), // 13장 보너스카드 덱 (셔플됨)
+    bonusDiscard: [],        // 사용한 보너스카드가 쌓이는 버림더미 (덱이 떨어지면 다시 섞어요)
+    bonusTileCooldown: {},   // cellId -> turnCounter 값이 될 때까지 사용 불가
+    turnCounter: 0,          // endTurn마다 증가 (보너스 칸 쿨다운 계산용)
+    pendingExtraTurn: null,  // suspectId: '차례를 한 번 더' 카드 사용 시 다음 endTurn을 무시하고 같은 사람이 계속
+    forcedMoveDrawOffer: null, // {playerId, used}: 다른 사람 제안으로 끌려왔을 때 원하면 보너스카드를 뽑을 수 있는 제안
+    pendingReveal: null,     // {requesterId, targetId, resolved, revealedCard}: '카드 공개 지목' 카드 처리용
+  };
+}
+
+function saveState(){
+  if(MODE==='online'){
+    fbDb.ref('rooms/'+ROOM_CODE+'/state').set(state);
+  } else {
+    render();
+  }
+}
+
+function currentPlayer(){ return state.players.find(p=>p.id===state.turnOrder[state.turnIndex]); }
+function myTurn(){ return state.turnOrder[state.turnIndex] === myPlayerId; }
+
+function addLog(text){ state.log.push(text); if(state.log.length>60) state.log.shift(); }
+
+// ===================== LOCAL 전용: 화면 넘기기 게이트 =====================
+function passGateThenRender(customMsg){
+  if(MODE!=='local'){ render(); return; }
+  const cp = state.players.find(p=>p.id===myPlayerId);
+  document.getElementById('passOverlayName').textContent = (cp?cp.name:'') + '님 차례!';
+  openOverlay('passOverlay');
+  document.getElementById('passOverlayBtn').onclick = ()=>{
+    closeOverlay('passOverlay');
+    render();
+  };
+}
+
+function passGateForPlayer(playerId, afterMsg, cb){
+  if(MODE!=='local'){ cb(); return; }
+  const p = state.players.find(pl=>pl.id===playerId);
+  document.getElementById('passOverlayName').textContent = (p?p.name:'') + '님, 넘겨받으세요!';
+  openOverlay('passOverlay');
+  document.getElementById('passOverlayBtn').onclick = ()=>{
+    closeOverlay('passOverlay');
+    myPlayerId = playerId;
+    cb();
+  };
+}
+
+// ===================== 보드 렌더링 =====================
+let reachableSet = [];
+
+function render(){
+  if(!state) return;
+  const leaveBtn = document.getElementById('btnLeaveGame');
+  if(leaveBtn) leaveBtn.style.display = (MODE==='online') ? 'inline-block' : 'none';
+  renderTurnBanner();
+  renderBoard();
+  renderActionButtons();
+  renderLog();
+  renderBonusBadge();
+  checkAutoOverlays();
+}
+
+function renderBonusBadge(){
+  const badge = document.getElementById('bonusCountBadge');
+  if(!badge) return;
+  const cnt = (state.bonusHands && state.bonusHands[myPlayerId] || []).length;
+  badge.textContent = cnt>0 ? ' ('+cnt+')' : '';
+}
+
+function renderTurnBanner(){
+  const cp = currentPlayer();
+  const s = getSuspect(cp.suspectId);
+  let txt = cp.name===s.name ? `${s.emoji} ${s.name}님의 차례` : `${s.emoji} ${cp.name}(${s.name})님의 차례`;
+  if(state.phase==='ended') txt = '게임 종료';
+  document.getElementById('turnBanner').textContent = txt;
+}
+
+function fitBoard(){
+  const wrap = document.getElementById('boardWrap');
+  const scale = document.getElementById('boardScale');
+  if(!wrap || !scale) return;
+  const s = Math.min(1, (wrap.clientWidth||576)/576);
+  scale.style.transform = 'scale('+s+')';
+  wrap.style.height = Math.round(600*s)+'px';
+}
+window.addEventListener('resize', fitBoard);
+
+function renderBoard(){
+  const board = document.getElementById('board');
+  board.innerHTML='';
+  const reach = new Set(reachableSet);
+  const occupied = new Set(Object.values(state.positions));
+  const cpNode = state.positions[currentPlayer().suspectId];
+
+  // 1) 복도 칸
+  Object.values(GRAPH.nodes).forEach(n=>{
+    if(n.type!=='cell') return;
+    const div = document.createElement('div');
+    div.className = 'cell';
+    if(DOOR_CELLS[n.id]) div.classList.add('door');
+    if(occupied.has(n.id)) div.classList.add('occupied');
+    if(reach.has(n.id)) div.classList.add('reachable');
+    if(BONUS_TILES.includes(n.id)){
+      div.classList.add('bonus-tile');
+      const onCooldown = (state.turnCounter||0) < (state.bonusTileCooldown[n.id]||0);
+      if(onCooldown){ div.classList.add('cooldown'); div.textContent='⏳'; }
+      else{ div.textContent='❓'; }
+    }
+    div.style.left = (n.c*CELL)+'px';
+    div.style.top  = (n.r*CELL)+'px';
+    div.onclick = ()=> onNodeClick(n.id);
+    board.appendChild(div);
+  });
+
+  // 2) 방 (비밀 금고실 포함)
+  PLACES.forEach(rm=>{
+    const div = document.createElement('div');
+    div.className = 'room-div';
+    if(rm.id===VAULT_ID) div.classList.add('vault-room');
+    if(reach.has(rm.id)) div.classList.add('reachable');
+    if(cpNode===rm.id) div.classList.add('current-room');
+    div.style.left   = (rm.c*CELL)+'px';
+    div.style.top    = (rm.r*CELL)+'px';
+    div.style.width  = (rm.w*CELL)+'px';
+    div.style.height = (rm.h*CELL)+'px';
+    div.innerHTML = `<div class="room-emoji">${rm.emoji}</div><div>${rm.name}</div>` +
+      (rm.id===VAULT_ID ? '<div class="vault-tag">🚨 최종 고발</div>' : '') +
+      (SECRET_PASSAGES[rm.id] ? '<div class="secret-tag">🚪 비밀통로</div>' : '');
+    div.onclick = ()=> onNodeClick(rm.id);
+    board.appendChild(div);
+  });
+
+  // 3) 말 (아무도 맡지 않은 용의자는 살짝 흐리게 표시해요)
+  const grouped = {};
+  Object.entries(state.positions).forEach(([sid,nodeId])=>{
+    (grouped[nodeId] = grouped[nodeId] || []).push(sid);
+  });
+  Object.entries(grouped).forEach(([nodeId, sids])=>{
+    const node = GRAPH.nodes[nodeId];
+    if(!node) return;
+    sids.forEach((sid,i)=>{
+      const sus = getSuspect(sid);
+      const npc = isNpcSuspect(sid);
+      const ownerName = getPlayerNameForSuspect(sid); // 플레이어 닉네임 (없으면 null = 아무도 안 맡음)
+      const tk = document.createElement('div');
+      tk.className = 'token'+(npc?' token-npc':'');
+      tk.style.background = sus.color;
+      let left, top;
+      if(node.type==='room'){
+        left = node.c*CELL + 16 + (i%4)*20;
+        top  = (node.r+node.h)*CELL - 16 - Math.floor(i/4)*20;
+      } else {
+        left = node.c*CELL + CELL/2;
+        top  = node.r*CELL + CELL/2;
+      }
+      tk.style.left = left+'px';
+      tk.style.top  = top+'px';
+      tk.title = sus.name + (ownerName ? ` (${ownerName})` : ' (조종하는 사람 없음)');
+      tk.textContent = sus.emoji;
+      board.appendChild(tk);
+
+      // 닉네임(또는 용의자 이름) 라벨을 말 밑에 작게 표시해요.
+      const label = document.createElement('div');
+      label.className = 'token-label'+(npc?' token-label-npc':'');
+      label.textContent = ownerName || sus.name;
+      label.style.left = left+'px';
+      label.style.top  = (top+13)+'px';
+      board.appendChild(label);
+    });
+  });
+
+  fitBoard();
+}
+
+function renderActionButtons(){
+  const wrap = document.getElementById('actionButtons');
+  wrap.innerHTML='';
+  if(state.forcedMoveDrawOffer && !state.forcedMoveDrawOffer.used && state.forcedMoveDrawOffer.playerId===myPlayerId){
+    const offerBox = document.createElement('div');
+    offerBox.style.cssText='background:#fff0fa;border:2px dashed #c76bd6;border-radius:12px;padding:8px 10px;margin-bottom:8px;';
+    const msg = document.createElement('b'); msg.textContent='❓ 다른 사람의 제안으로 이 방에 끌려왔어요! 원한다면 보너스카드를 한 장 뽑을 수 있어요.';
+    offerBox.appendChild(msg);
+    const btnRow = document.createElement('div'); btnRow.className='row'; btnRow.style.marginTop='6px';
+    const drawBtn = document.createElement('button'); drawBtn.className='btn small orange'; drawBtn.textContent='뽑기';
+    drawBtn.onclick = ()=> resolveForcedMoveDraw(true);
+    const skipBtn = document.createElement('button'); skipBtn.className='btn small'; skipBtn.textContent='넘어가기';
+    skipBtn.onclick = ()=> resolveForcedMoveDraw(false);
+    btnRow.appendChild(drawBtn); btnRow.appendChild(skipBtn);
+    offerBox.appendChild(btnRow);
+    wrap.appendChild(offerBox);
+  }
+  if(state.phase==='ended') return;
+  const isMine = myTurn();
+  const cp = currentPlayer();
+  const curNode = state.positions[cp.suspectId];
+  const curNodeInfo = GRAPH.nodes[curNode];
+  const inRoom = curNodeInfo.type==='room';
+
+  if(!isMine){
+    const p = document.createElement('p'); p.textContent='다른 친구의 차례를 기다리는 중...';
+    wrap.appendChild(p);
+    return;
+  }
+  if(!cp.active){
+    const p = document.createElement('p'); p.textContent='고발에 실패해서 더이상 이동할 수 없어요. (다른 사람 증언은 도와줄 수 있어요)';
+    wrap.appendChild(p);
+    const eBtn = document.createElement('button'); eBtn.className='btn small'; eBtn.textContent='턴 넘기기'; eBtn.onclick = endTurn;
+    wrap.appendChild(eBtn);
+    return;
+  }
+
+  if(state.phase==='awaitRoll'){
+    const btn = document.createElement('button');
+    btn.className='btn orange'; btn.textContent='🎲 주사위 굴리기';
+    btn.onclick = rollDice;
+    wrap.appendChild(btn);
+    if(inRoom && SECRET_PASSAGES[curNode]){
+      const sp = document.createElement('button');
+      sp.className='btn yellow';
+      sp.textContent = `🚪 비밀통로로 ${getRoom(SECRET_PASSAGES[curNode]).name} 가기`;
+      sp.onclick = useSecretPassage;
+      wrap.appendChild(sp);
+    }
+    // 원작 규칙: 다른 사람의 제안으로 이 방에 끌려왔다면, 이동 없이 바로 제안할 수 있어요
+    if(inRoom && state.movedBySuggestion===cp.suspectId){
+      const sBtn = document.createElement('button');
+      sBtn.className='btn green'; sBtn.textContent='🔍 이 방에서 바로 제안하기';
+      sBtn.onclick = openSuggest;
+      wrap.appendChild(sBtn);
+    }
+  } else if(state.phase==='moving'){
+    const p = document.createElement('p');
+    const d = state.lastDice ? ` (${state.lastDice[0]} + ${state.lastDice[1]})` : '';
+    p.textContent = `🎲 ${state.lastRoll}칸${d} - 초록색으로 표시된 칸이나 방을 클릭하세요!`;
+    wrap.appendChild(p);
+  } else if(state.phase==='inRoom'){
+    const info = document.createElement('p');
+    info.textContent = curNode===VAULT_ID
+      ? `${VAULT.emoji} ${VAULT.name}에 도착! 기밀 봉투를 확인할 수 있어요.`
+      : `${getRoom(curNode).emoji} ${getRoom(curNode).name}에 도착!`;
+    wrap.appendChild(info);
+    if(curNode!==VAULT_ID){
+      const sBtn = document.createElement('button');
+      sBtn.className='btn orange'; sBtn.textContent='🔍 제안하기'; sBtn.onclick = openSuggest;
+      wrap.appendChild(sBtn);
+    }
+    const eBtn = document.createElement('button');
+    eBtn.className='btn small'; eBtn.textContent='턴 넘기기'; eBtn.onclick = endTurn;
+    wrap.appendChild(eBtn);
+  }
+
+  // 비밀 금고실에 있으면 언제든 최종 고발 버튼
+  if(curNode===VAULT_ID){
+    const aBtn = document.createElement('button');
+    aBtn.className='btn orange'; aBtn.textContent='🚨 최종 고발 (기밀 봉투 확인)'; aBtn.onclick = openAccuse;
+    wrap.appendChild(aBtn);
+  }
+}
+
+function renderLog(){
+  const box = document.getElementById('logBox');
+  box.innerHTML = state.log.map(t=>`<p>${t}</p>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+// ===================== 이동 로직 =====================
+// 원작처럼 사람 수와 상관없이 용의자 6명 모두 처음부터 보드에 있어요.
+// 대신 아무도 맡지 않은 용의자는 살짝 흐리게 표시해서 "조종하는 사람이 없다"는 걸 구분해요.
+function isNpcSuspect(suspectId){
+  return !state.players.some(p=>p.suspectId===suspectId);
+}
+
+function bfsReachable(start, maxSteps){
+  const result = new Set();
+  const visited = {[start]:0};
+  const queue = [[start,0]];
+  const occupied = new Set(Object.values(state.positions));
+  while(queue.length){
+    const [node, steps] = queue.shift();
+    if(steps>0){
+      const info = GRAPH.nodes[node];
+      if(info.type==='cell' && occupied.has(node)) continue; // 복도 한 칸에는 한 명만
+      result.add(node);
+      if(info.type==='room') continue; // 방에 들어가면 이동 종료
+    }
+    if(steps>=maxSteps) continue;
+    (GRAPH.edges[node]||[]).forEach(nb=>{
+      if(!(nb in visited) || visited[nb]>steps+1){
+        visited[nb]=steps+1;
+        queue.push([nb, steps+1]);
+      }
+    });
+  }
+  result.delete(start);
+  return [...result];
+}
+
+function rollDice(){
+  const d1 = 1+Math.floor(Math.random()*6);
+  const d2 = 1+Math.floor(Math.random()*6);
+  state.lastDice = [d1,d2];
+  state.lastRoll = d1+d2;
+  const cp = currentPlayer();
+  const curNode = state.positions[cp.suspectId];
+  reachableSet = bfsReachable(curNode, state.lastRoll);
+  state.phase='moving';
+  addLog(`🎲 ${cp.name}님이 주사위를 굴려 ${d1}+${d2}=${state.lastRoll}칸이 나왔어요.`);
+  if(reachableSet.length===0){
+    addLog(`😵 ${cp.name}님은 갈 수 있는 곳이 없어서 턴을 넘겨요.`);
+    endTurnInternal();
+  }
+  saveState();
+}
+
+function useSecretPassage(){
+  const cp = currentPlayer();
+  const curNode = state.positions[cp.suspectId];
+  const dest = SECRET_PASSAGES[curNode];
+  state.positions[cp.suspectId] = dest;
+  addLog(`🚪 ${cp.name}님이 비밀통로로 ${getRoom(dest).name}(으)로 이동했어요!`);
+  state.phase='inRoom';
+  reachableSet=[];
+  saveState();
+}
+
+function onNodeClick(nodeId){
+  if(state.phase!=='moving') return;
+  if(!myTurn()) return;
+  if(!reachableSet.includes(nodeId)) return;
+  const cp = currentPlayer();
+  state.positions[cp.suspectId] = nodeId;
+  reachableSet=[];
+  const info = GRAPH.nodes[nodeId];
+  if(info.type==='room'){
+    addLog(`🚶 ${cp.name}님이 ${info.name}(으)로 이동했어요.`);
+    state.phase='inRoom';
+    saveState();
+  } else {
+    addLog(`🚶 ${cp.name}님이 복도로 이동했어요.`);
+    const gotCard = grantBonusIfOnTile(nodeId, cp);
+    state.phase='awaitRoll'; // 복도에 멈추면 턴 종료로 간주(단순화)
+    saveState();
+    if(gotCard){
+      // 카드를 뽑은 사람에게 먼저 몰래 보여준 다음에, 확인을 눌러야 턴이 넘어가요 (다음 사람 화면 전환 전에!).
+      showBonusCardReveal(cp.id, gotCard, ()=>{ endTurnInternal(); saveState(); });
+    } else {
+      endTurnInternal();
+      saveState();
+    }
+  }
+}
+
+function grantBonusIfOnTile(nodeId, cp){
+  if(!BONUS_TILES.includes(nodeId)) return null;
+  const cdUntil = state.bonusTileCooldown[nodeId] || 0;
+  if((state.turnCounter||0) < cdUntil) return null; // 아직 쿨다운 중
+  const cardId = drawBonusCardFromDeck();
+  if(!state.bonusHands[cp.id]) state.bonusHands[cp.id] = [];
+  state.bonusHands[cp.id].push(cardId);
+  state.bonusTileCooldown[nodeId] = (state.turnCounter||0) + BONUS_TILE_COOLDOWN_TURNS;
+  // 어떤 카드인지는 비밀! 기록에는 카드 이름을 남기지 않아요.
+  addLog(`❓ ${cp.name}님이 보너스 칸에서 카드를 한 장 뽑았어요! (어떤 카드인지는 본인만 알아요)`);
+  return cardId;
+}
+
+// 방금 뽑은 보너스카드를 '확인' 누를 때까지 화면에 몰래 보여줘요. (revealShowOverlay 버튼을 잠깐 빌려써요)
+function showBonusCardReveal(playerId, cardId, afterConfirmCb){
+  const doReveal = ()=>{
+    const bc = getBonusCard(cardId);
+    document.getElementById('revealShowTitle').textContent = '❓ 보너스카드를 뽑았어요!';
+    const cardEl = document.getElementById('revealShowCard');
+    cardEl.classList.add('text-mode');
+    cardEl.textContent = `${bc.emoji} ${bc.name}`;
+    openOverlay('revealShowOverlay');
+    const closeBtn = document.querySelector('#revealShowOverlay button');
+    closeBtn.onclick = ()=>{
+      closeOverlay('revealShowOverlay');
+      cardEl.classList.remove('text-mode');
+      closeBtn.onclick = ()=> closeOverlay('revealShowOverlay'); // 원래 동작으로 복구
+      afterConfirmCb();
+    };
+  };
+  // 로컬(한 기기 돌려쓰기) 모드에서는, 이동 중엔 다들 화면을 보고 있을 수 있으니
+  // 카드를 공개하기 전에 "화면 넘기세요" 안내부터 보여줘요.
+  if(MODE==='local'){
+    passGateForPlayer(playerId, null, doReveal);
+  } else {
+    doReveal();
+  }
+}
+
+// 원작처럼, 다른 사람의 제안으로 자기 말이 끌려온 사람이 원할 때만 보너스카드를 뽑는 선택지
+function resolveForcedMoveDraw(draw){
+  const offer = state.forcedMoveDrawOffer;
+  if(!offer || offer.used) return;
+  offer.used = true;
+  const p = state.players.find(pl=>pl.id===offer.playerId);
+  if(draw){
+    const cardId = drawBonusCardFromDeck();
+    if(!state.bonusHands[offer.playerId]) state.bonusHands[offer.playerId]=[];
+    state.bonusHands[offer.playerId].push(cardId);
+    addLog(`❓ ${p.name}님이 끌려온 보상으로 카드를 한 장 뽑았어요! (어떤 카드인지는 본인만 알아요)`);
+    saveState();
+    showBonusCardReveal(offer.playerId, cardId, ()=>{});
+  } else {
+    addLog(`${p.name}님은 보너스카드를 뽑지 않기로 했어요.`);
+    saveState();
+  }
+}
+
+function endTurn(){
+  endTurnInternal();
+  saveState();
+}
+function endTurnInternal(){
+  reachableSet=[];
+  state.lastRoll=null;
+  state.lastDice=null;
+  if(state.movedBySuggestion===currentPlayer().suspectId) state.movedBySuggestion=null;
+  state.turnCounter = (state.turnCounter||0) + 1;
+
+  // 🎲 '한 번 더!' 보너스카드를 사용했다면, 차례를 넘기지 않고 같은 사람이 계속해요.
+  if(state.pendingExtraTurn && state.pendingExtraTurn===currentPlayer().suspectId){
+    state.pendingExtraTurn = null;
+    state.phase='awaitRoll';
+    return;
+  }
+
+  let next = state.turnIndex;
+  do{
+    next = (next+1) % state.turnOrder.length;
+  } while(!state.players.find(p=>p.id===state.turnOrder[next]).active && next!==state.turnIndex);
+  state.turnIndex = next;
+  state.phase='awaitRoll';
+  if(MODE==='local'){
+    passGateForPlayer(state.turnOrder[next], null, ()=>{ render(); });
+  }
+}
+
+// ===================== 내 카드 보기 =====================
+function openMyHand(){
+  if(MODE==='local'){
+    passGateForPlayer(myPlayerId, null, ()=> showHandFor(myPlayerId, true));
+  } else {
+    showHandFor(myPlayerId);
+  }
+}
+function showHandFor(pid, alreadyGated){
+  const hand = state.hands[pid]||[];
+  const wrap = document.getElementById('handOverlayCards');
+  wrap.innerHTML = hand.map(c=>`<div class="mini-card">${getCardLabel(c)}</div>`).join('') || '<p>카드 없음</p>';
+  openOverlay('handOverlay');
+}
+
+// ===================== 보너스카드 =====================
+function consumeBonusCard(pid, cardId){
+  const hand = state.bonusHands && state.bonusHands[pid];
+  if(!hand) return;
+  const i = hand.indexOf(cardId);
+  if(i>=0) hand.splice(i,1);
+  if(!state.bonusDiscard) state.bonusDiscard=[];
+  state.bonusDiscard.push(cardId);
+}
+
+function openBonusCards(){
+  if(MODE==='local'){
+    passGateForPlayer(myPlayerId, null, ()=> showBonusCardsFor(myPlayerId));
+  } else {
+    showBonusCardsFor(myPlayerId);
+  }
+}
+
+function showBonusCardsFor(pid){
+  const hand = (state.bonusHands && state.bonusHands[pid]) || [];
+  const wrap = document.getElementById('bonusOverlayCards');
+  const canUse = myTurn() && currentPlayer().id===pid && currentPlayer().active && state.phase!=='ended';
+  if(hand.length===0){
+    wrap.innerHTML = '<p>아직 보너스 카드가 없어요. 복도의 ❓ 칸을 밟아보세요!</p>';
+  } else {
+    wrap.innerHTML='';
+    hand.forEach(cardId=>{
+      const bc = getBonusCard(cardId);
+      const row = document.createElement('div');
+      row.className='mini-card wide';
+      row.style.marginBottom='8px';
+      const label = document.createElement('span');
+      label.innerHTML = `<b>${bc.emoji} ${bc.name}</b>`;
+      row.appendChild(label);
+      // '카드 엿보기'는 다른 두 사람이 반증할 때 자동으로 제안이 뜨는 수동적인 카드라 여기선 사용 버튼이 없어요.
+      if(canUse && cardId!=='bonus_peek_reveal'){
+        const useBtn = document.createElement('button');
+        useBtn.className='btn small orange';
+        useBtn.textContent='사용';
+        useBtn.onclick = ()=> useBonusCard(cardId);
+        row.appendChild(useBtn);
+      }
+      const desc = document.createElement('div');
+      desc.className='bonus-desc';
+      desc.textContent = bc.desc;
+      row.appendChild(desc);
+      wrap.appendChild(row);
+    });
+  }
+  openOverlay('bonusOverlay');
+}
+
+function useBonusCard(cardId){
+  if(!myTurn() || !currentPlayer().active){ showInfo('내 차례에만 사용할 수 있어요!','⏳'); return; }
+  const cp = currentPlayer();
+  const phase = state.phase;
+
+  if(cardId==='bonus_extra_turn'){
+    if(phase==='moving' || phase==='disproving'){ showInfo('지금은 사용할 수 없어요.','🙅'); return; }
+    consumeBonusCard(cp.id, cardId);
+    state.pendingExtraTurn = cp.suspectId;
+    addLog(`🔁 ${cp.name}님이 [차례를 한 번 더] 카드를 사용했어요!`);
+    closeOverlay('bonusOverlay');
+    saveState();
+
+  } else if(cardId==='bonus_plus6'){
+    if(phase!=='moving'){ showInfo('주사위를 굴린 직후에만 사용할 수 있어요.','🙅'); return; }
+    consumeBonusCard(cp.id, cardId);
+    state.lastRoll = (state.lastRoll||0) + 6;
+    const curNode = state.positions[cp.suspectId];
+    reachableSet = bfsReachable(curNode, state.lastRoll);
+    addLog(`🎲 ${cp.name}님이 [주사위 +6] 카드를 사용했어요! (이동 가능 거리: ${state.lastRoll}칸)`);
+    closeOverlay('bonusOverlay');
+    saveState();
+
+  } else if(cardId==='bonus_reveal'){
+    if(phase==='disproving'){ showInfo('반증이 끝난 뒤에 사용해주세요.','🙅'); return; }
+    consumeBonusCard(cp.id, cardId);
+    closeOverlay('bonusOverlay');
+    openRevealTargetPicker();
+
+  } else if(cardId==='bonus_teleport'){
+    if(phase!=='awaitRoll'){ showInfo('주사위를 굴리기 전에만 사용할 수 있어요.','🙅'); return; }
+    consumeBonusCard(cp.id, cardId);
+    closeOverlay('bonusOverlay');
+    openTeleportPicker();
+
+  } else if(cardId==='bonus_free_suggest'){
+    if(phase==='moving' || phase==='disproving'){ showInfo('지금은 사용할 수 없어요.','🙅'); return; }
+    consumeBonusCard(cp.id, cardId);
+    closeOverlay('bonusOverlay');
+    openFreeSuggestPicker();
+
+  } else if(cardId==='bonus_accuse'){
+    if(phase==='moving' || phase==='disproving'){ showInfo('지금은 사용할 수 없어요.','🙅'); return; }
+    consumeBonusCard(cp.id, cardId);
+    addLog(`⚖️ ${cp.name}님이 [바로 최종 고발] 카드를 사용했어요! 금고실에 가지 않고도 최종 고발을 할 수 있어요.`);
+    closeOverlay('bonusOverlay');
+    saveState();
+    openAccuse(true);
+  }
+}
+
+// 🚪 원하는 장소로 이동
+function openTeleportPicker(){
+  const grid = document.getElementById('teleportGrid'); grid.innerHTML='';
+  PLACES.forEach(rm=>{
+    const chip = document.createElement('div'); chip.className='pick-chip';
+    chip.textContent = rm.emoji+' '+rm.name;
+    chip.onclick = ()=>{ closeOverlay('teleportOverlay'); doTeleport(rm.id); };
+    grid.appendChild(chip);
+  });
+  openOverlay('teleportOverlay');
+}
+function doTeleport(roomId){
+  const cp = currentPlayer();
+  state.positions[cp.suspectId] = roomId;
+  addLog(`🚪 ${cp.name}님이 [원하는 장소로 이동] 카드로 ${getRoom(roomId).emoji} ${getRoom(roomId).name}(으)로 이동했어요!`);
+  state.phase='inRoom';
+  reachableSet=[];
+  saveState();
+}
+
+// 📣 카드 공개 지목: 대상을 고르면, 대상이 자기 카드 중 하나를 직접 골라 모두에게 공개해요.
+function openRevealTargetPicker(){
+  const grid = document.getElementById('revealTargetGrid'); grid.innerHTML='';
+  const cp = currentPlayer();
+  state.players.filter(p=>p.id!==cp.id).forEach(p=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = p.name;
+    chip.onclick = ()=>{ closeOverlay('revealTargetOverlay'); doRevealTarget(p.id); };
+    grid.appendChild(chip);
+  });
+  openOverlay('revealTargetOverlay');
+}
+function doRevealTarget(targetPid){
+  const cp = currentPlayer();
+  const targetName = state.players.find(p=>p.id===targetPid).name;
+  addLog(`📣 ${cp.name}님이 [카드 공개 지목] 카드로 ${targetName}님을 지목했어요! ${targetName}님은 자기 카드 중 한 장을 모두에게 공개해야 해요.`);
+  state.pendingReveal = { requesterId: cp.id, targetId: targetPid, resolved:false, revealedCard:null };
+  saveState();
+}
+function showPublicRevealChoice(){
+  const pr = state.pendingReveal;
+  const hand = state.hands[pr.targetId]||[];
+  const grid = document.getElementById('publicRevealGrid'); grid.innerHTML='';
+  if(hand.length===0){
+    const btn = document.createElement('button'); btn.className='btn'; btn.textContent='카드가 없어요 (확인)';
+    btn.onclick = ()=>{ closeOverlay('publicRevealOverlay'); resolvePublicReveal(null); };
+    grid.appendChild(btn);
+  } else {
+    hand.forEach(c=>{
+      const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = getCardLabel(c);
+      chip.onclick = ()=>{ closeOverlay('publicRevealOverlay'); resolvePublicReveal(c); };
+      grid.appendChild(chip);
+    });
+  }
+  openOverlay('publicRevealOverlay');
+}
+function resolvePublicReveal(card){
+  const pr = state.pendingReveal;
+  const targetName = state.players.find(p=>p.id===pr.targetId).name;
+  if(card){
+    addLog(`📣 ${targetName}님이 카드를 공개했어요: [${getCardLabel(card)}]`);
+  } else {
+    addLog(`📣 ${targetName}님은 공개할 카드가 없어요.`);
+  }
+  pr.resolved = true;
+  pr.revealedCard = card;
+  saveState();
+}
+
+// 🔍 한 번 더 추리: 말을 옮기지 않고, 원하는 장소·용의자·도구로 바로 추리해요.
+function openFreeSuggestPicker(){
+  const roomGrid = document.getElementById('freeSuggestRoomGrid'); roomGrid.innerHTML='';
+  const susGrid = document.getElementById('freeSuggestSuspectGrid'); susGrid.innerHTML='';
+  const itemGrid = document.getElementById('freeSuggestItemGrid'); itemGrid.innerHTML='';
+  ROOMS.forEach(rm=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.dataset.id=rm.id;
+    chip.textContent = rm.emoji+' '+rm.name;
+    chip.onclick = ()=>{ roomGrid.querySelectorAll('.pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    roomGrid.appendChild(chip);
+  });
+  SUSPECTS.forEach(s=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.dataset.id=s.id;
+    chip.textContent = s.emoji+' '+s.name;
+    chip.onclick = ()=>{ susGrid.querySelectorAll('.pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    susGrid.appendChild(chip);
+  });
+  ITEMS.forEach(it=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.dataset.id=it.id;
+    chip.textContent = it.emoji+' '+it.name;
+    chip.onclick = ()=>{ itemGrid.querySelectorAll('.pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    itemGrid.appendChild(chip);
+  });
+  openOverlay('freeSuggestOverlay');
+}
+function submitFreeSuggestion(){
+  const rChip = document.querySelector('#freeSuggestRoomGrid .pick-chip.selected');
+  const sChip = document.querySelector('#freeSuggestSuspectGrid .pick-chip.selected');
+  const iChip = document.querySelector('#freeSuggestItemGrid .pick-chip.selected');
+  if(!rChip || !sChip || !iChip){ showInfo('장소, 용의자, 도구를 모두 선택해주세요!','🤔'); return; }
+  closeOverlay('freeSuggestOverlay');
+  startSuggestion(rChip.dataset.id, sChip.dataset.id, iChip.dataset.id, false);
+}
+
+// ===================== 제안하기 =====================
+function openSuggest(){
+  const cp = currentPlayer();
+  const curNode = state.positions[cp.suspectId];
+  if(curNode===VAULT_ID){
+    showInfo(`${VAULT.name}은 장소 카드가 아니라서 제안할 수 없어요. 여기서는 최종 고발만 할 수 있어요!`, '🔒');
+    return;
+  }
+  document.getElementById('suggestRoomName').textContent = getRoom(curNode).name;
+  const sGrid = document.getElementById('suggestSuspectGrid'); sGrid.innerHTML='';
+  SUSPECTS.forEach(s=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = s.emoji+' '+s.name;
+    chip.dataset.id = s.id;
+    chip.onclick = ()=>{ document.querySelectorAll('#suggestSuspectGrid .pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    sGrid.appendChild(chip);
+  });
+  const iGrid = document.getElementById('suggestItemGrid'); iGrid.innerHTML='';
+  ITEMS.forEach(it=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = it.emoji+' '+it.name;
+    chip.dataset.id = it.id;
+    chip.onclick = ()=>{ document.querySelectorAll('#suggestItemGrid .pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    iGrid.appendChild(chip);
+  });
+  openOverlay('suggestOverlay');
+}
+
+function submitSuggestion(){
+  const sChip = document.querySelector('#suggestSuspectGrid .pick-chip.selected');
+  const iChip = document.querySelector('#suggestItemGrid .pick-chip.selected');
+  if(!sChip || !iChip){ showInfo('용의자와 아이템을 모두 선택해주세요!','🤔'); return; }
+  closeOverlay('suggestOverlay');
+  const cp = currentPlayer();
+  const roomId = state.positions[cp.suspectId];
+  startSuggestion(roomId, sChip.dataset.id, iChip.dataset.id, true);
+}
+
+// moveSuspect: 보통의 제안은 지목된 용의자 말을 그 방으로 끌고 오지만(true),
+// '한 번 더 추리' 보너스카드는 어떤 말도 이동시키지 않아요(false).
+function startSuggestion(roomId, suggSuspect, suggItem, moveSuspect){
+  const cp = currentPlayer();
+  if(moveSuspect){
+    state.positions[suggSuspect] = roomId;
+    state.movedBySuggestion = suggSuspect;
+    addLog(`🔍 ${cp.name}님의 제안: "${getSuspect(suggSuspect).name}가 ${getItem(suggItem).name}에 담아 ${getRoom(roomId).name}에 숨겼다!"`);
+    const movedOwner = state.players.find(p=>p.suspectId===suggSuspect);
+    if(movedOwner && movedOwner.id!==cp.id){
+      // 원작처럼, 다른 사람의 제안으로 말이 끌려온 사람은 원한다면 보너스카드를 뽑을 수 있어요.
+      state.forcedMoveDrawOffer = { playerId: movedOwner.id, used:false };
+    }
+  } else {
+    addLog(`🔍 ${cp.name}님의 [한 번 더 추리] 카드: "${getSuspect(suggSuspect).name}가 ${getItem(suggItem).name}에 담아 ${getRoom(roomId).name}에 숨겼다!" (말은 이동하지 않아요)`);
+  }
+
+  const order = state.turnOrder;
+  const startIdx = order.indexOf(cp.id);
+  const queue = [];
+  for(let i=1;i<order.length;i++){
+    queue.push(order[(startIdx+i)%order.length]);
+  }
+  state.pendingSuggestion = {
+    suggesterId: cp.id, suspect:suggSuspect, item:suggItem, room:roomId,
+    queue, queueIndex:0, revealedCard:null, revealedBy:null, resolved:false, peekOffers:null
+  };
+  state.phase='disproving';
+  saveState();
+}
+
+function checkAutoOverlays(){
+  if(state.pendingReveal && !state.pendingReveal.resolved){
+    const pr = state.pendingReveal;
+    if(MODE==='local'){
+      if(myPlayerId!==pr.targetId){
+        passGateForPlayer(pr.targetId, null, ()=> showPublicRevealChoice());
+      } else {
+        showPublicRevealChoice();
+      }
+    } else if(myPlayerId===pr.targetId){
+      showPublicRevealChoice();
+    }
+    return;
+  }
+  if(!state.pendingSuggestion) return;
+  const ps = state.pendingSuggestion;
+  if(ps.resolved) return;
+  const disproverId = ps.queue[ps.queueIndex];
+  if(!disproverId){
+    // 아무도 반증 못함
+    addLog('🙅 아무도 반증하지 못했어요! 이 제안이 맞을 수도 있어요...');
+    state.pendingSuggestion.resolved = true;
+    state.phase='inRoom';
+    saveState();
+    return;
+  }
+  if(MODE==='local'){
+    if(myPlayerId!==disproverId){
+      passGateForPlayer(disproverId, null, ()=> showDisproveChoice(disproverId));
+    } else {
+      showDisproveChoice(disproverId);
+    }
+  } else {
+    if(myPlayerId===disproverId){
+      showDisproveChoice(disproverId);
+    } else if(myPlayerId===ps.suggesterId && ps.revealedCard && ps.revealedBy===disproverId){
+      // handled below after move to next
+    }
+  }
+}
+
+function showDisproveChoice(pid){
+  const ps = state.pendingSuggestion;
+  const hand = state.hands[pid]||[];
+  const matches = hand.filter(c=> c===ps.suspect || c===ps.item || c===ps.room);
+  document.getElementById('revealChoiceTitle').textContent = matches.length ? '반증할 카드를 골라주세요' : '보여줄 카드가 없어요';
+  const grid = document.getElementById('revealChoiceGrid');
+  grid.innerHTML='';
+  if(matches.length===0){
+    const btn = document.createElement('button');
+    btn.className='btn'; btn.textContent='확인 (반증 불가)';
+    btn.onclick = ()=>{ closeOverlay('revealChoiceOverlay'); resolveDisproveStep(pid, null); };
+    grid.appendChild(btn);
+  } else {
+    matches.forEach(c=>{
+      const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = getCardLabel(c);
+      chip.onclick = ()=>{ closeOverlay('revealChoiceOverlay'); resolveDisproveStep(pid, c); };
+      grid.appendChild(chip);
+    });
+  }
+  openOverlay('revealChoiceOverlay');
+}
+
+// 이 반증(card 공개)과 무관한 다른 플레이어들 중 [카드 엿보기] 보너스카드를 가진 사람에게
+// "같이 볼까요?" 하고 제안 대상 목록을 만들어요. (본인 제안자 / 카드를 보여준 사람은 제외)
+function buildPeekOfferList(ps, revealerPid){
+  const list = [];
+  state.players.forEach(p=>{
+    if(p.id===ps.suggesterId || p.id===revealerPid) return;
+    if(((state.bonusHands && state.bonusHands[p.id]) || []).includes('bonus_peek_reveal')){
+      list.push(p.id);
+    }
+  });
+  return list;
+}
+
+function resolveDisproveStep(pid, card){
+  const ps = state.pendingSuggestion;
+  if(card){
+    ps.revealedCard = card;
+    ps.revealedBy = pid;
+    ps.resolved = true;
+    ps.peekOffers = {};
+    buildPeekOfferList(ps, pid).forEach(id=>{ ps.peekOffers[id] = 'pending'; });
+    addLog(`👀 ${state.players.find(p=>p.id===pid).name}님이 ${state.players.find(p=>p.id===ps.suggesterId).name}님에게만 카드를 몰래 보여줬어요.`);
+    state.phase='inRoom';
+    saveState();
+    // 로컬: 제안자에게 다시 넘겨서 카드 보여주고, 그 다음 [카드 엿보기]를 가진 사람들에게도 순서대로 제안해요.
+    if(MODE==='local'){
+      passGateForPlayer(ps.suggesterId, null, ()=>{
+        document.getElementById('revealShowTitle').textContent = state.players.find(p=>p.id===pid).name+'님이 보여준 카드:';
+        document.getElementById('revealShowCard').classList.remove('text-mode'); document.getElementById('revealShowCard').textContent = getCardLabel(card);
+        openOverlay('revealShowOverlay');
+        render();
+        offerPeeksLocal(Object.keys(ps.peekOffers));
+      });
+    } else {
+      render();
+    }
+  } else {
+    addLog(`🙅 ${state.players.find(p=>p.id===pid).name}님은 반증할 카드가 없어요.`);
+    ps.queueIndex++;
+    saveState();
+  }
+}
+
+// 로컬 모드: [카드 엿보기] 보너스카드를 가진 사람들에게 한 명씩 순서대로 "같이 볼까요?" 물어봐요.
+function offerPeeksLocal(ids){
+  if(!ids || ids.length===0){ render(); return; }
+  const pid = ids[0];
+  const rest = ids.slice(1);
+  passGateForPlayer(pid, null, ()=>{
+    document.getElementById('infoEmoji').textContent = '👀';
+    document.getElementById('infoText').textContent = '[카드 엿보기] 카드로 방금 공개된 카드를 같이 볼까요?';
+    openOverlay('infoOverlay');
+    // showInfo의 기본 확인 버튼 대신, 여기서만 쓰는 예/아니오 버튼으로 잠시 교체해요.
+    const modal = document.querySelector('#infoOverlay .modal');
+    const oldBtn = modal.querySelector('button');
+    const btnRow = document.createElement('div'); btnRow.className='row'; btnRow.style.justifyContent='center'; btnRow.style.marginTop='10px';
+    const yesBtn = document.createElement('button'); yesBtn.className='btn small orange'; yesBtn.textContent='볼래요 (카드 사용)';
+    const noBtn = document.createElement('button'); noBtn.className='btn small'; noBtn.textContent='안 볼래요';
+    oldBtn.style.display='none';
+    yesBtn.onclick = ()=>{ btnRow.remove(); oldBtn.style.display=''; closeOverlay('infoOverlay'); answerPeekOffer(pid, true, rest); };
+    noBtn.onclick  = ()=>{ btnRow.remove(); oldBtn.style.display=''; closeOverlay('infoOverlay'); answerPeekOffer(pid, false, rest); };
+    btnRow.appendChild(yesBtn); btnRow.appendChild(noBtn);
+    modal.appendChild(btnRow);
+  });
+}
+function answerPeekOffer(pid, wantsPeek, restIds){
+  const ps = state.pendingSuggestion;
+  if(ps && ps.peekOffers && ps.peekOffers[pid]==='pending'){
+    if(wantsPeek){
+      consumeBonusCard(pid, 'bonus_peek_reveal');
+      ps.peekOffers[pid]='used';
+      addLog(`👀 ${state.players.find(p=>p.id===pid).name}님이 [카드 엿보기] 카드를 사용했어요.`);
+      saveState();
+      document.getElementById('revealShowTitle').textContent = '함께 엿본 카드:';
+      document.getElementById('revealShowCard').classList.remove('text-mode'); document.getElementById('revealShowCard').textContent = getCardLabel(ps.revealedCard);
+      openOverlay('revealShowOverlay');
+      const closeBtn = document.querySelector('#revealShowOverlay button');
+      closeBtn.onclick = ()=>{
+        closeOverlay('revealShowOverlay');
+        closeBtn.onclick = ()=> closeOverlay('revealShowOverlay'); // 원래 동작으로 복구
+        offerPeeksLocal(restIds);
+      };
+    } else {
+      ps.peekOffers[pid]='skipped';
+      saveState();
+      offerPeeksLocal(restIds);
+    }
+  } else {
+    offerPeeksLocal(restIds);
+  }
+}
+
+// online 모드에서 제안자 본인 화면에 공개카드 자동 표시 + [카드 엿보기] 보유자에게 자동 제안
+const _origRender = render;
+render = function(){
+  _origRender();
+  if(MODE!=='online' || !state || !state.pendingSuggestion) return;
+  const ps = state.pendingSuggestion;
+  if(ps.resolved && ps.revealedCard){
+    if(myPlayerId===ps.suggesterId && !ps._shownLocally){
+      document.getElementById('revealShowTitle').textContent = state.players.find(p=>p.id===ps.revealedBy).name+'님이 보여준 카드:';
+      document.getElementById('revealShowCard').classList.remove('text-mode'); document.getElementById('revealShowCard').textContent = getCardLabel(ps.revealedCard);
+      openOverlay('revealShowOverlay');
+      ps._shownLocally = true;
+    }
+    if(ps.peekOffers && ps.peekOffers[myPlayerId]==='pending' && !document.getElementById('peekOfferOverlay').classList.contains('active')){
+      openOverlay('peekOfferOverlay');
+    }
+  }
+};
+
+function answerPeekOfferOnline(wantsPeek){
+  closeOverlay('peekOfferOverlay');
+  const ps = state.pendingSuggestion;
+  if(!ps || !ps.peekOffers || ps.peekOffers[myPlayerId]!=='pending') return;
+  if(wantsPeek){
+    consumeBonusCard(myPlayerId, 'bonus_peek_reveal');
+    ps.peekOffers[myPlayerId]='used';
+    addLog(`👀 ${myOnlineName()}님이 [카드 엿보기] 카드를 사용했어요.`);
+    saveState();
+    document.getElementById('revealShowTitle').textContent = '함께 엿본 카드:';
+    document.getElementById('revealShowCard').classList.remove('text-mode'); document.getElementById('revealShowCard').textContent = getCardLabel(ps.revealedCard);
+    openOverlay('revealShowOverlay');
+  } else {
+    ps.peekOffers[myPlayerId]='skipped';
+    saveState();
+  }
+}
+
+// ===================== 최종 고발 =====================
+function openAccuse(skipVaultCheck){
+  if(!myTurn()){
+    showInfo('최종 고발은 자기 차례에만 할 수 있어요!', '⏳');
+    return;
+  }
+  const cp = currentPlayer();
+  if(!cp.active){
+    showInfo('이미 고발에 실패해서 다시 고발할 수 없어요.', '🙅');
+    return;
+  }
+  if(!skipVaultCheck && state.positions[cp.suspectId] !== VAULT_ID){
+    showInfo(`최종 고발은 보드 한가운데 ${VAULT.emoji} ${VAULT.name}에 들어가야만 할 수 있어요! 그곳으로 이동한 뒤 다시 시도해주세요.`, '🔒');
+    return;
+  }
+  const sGrid = document.getElementById('accuseSuspectGrid'); sGrid.innerHTML='';
+  SUSPECTS.forEach(s=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = s.emoji+' '+s.name;
+    chip.dataset.id=s.id;
+    chip.onclick = ()=>{ document.querySelectorAll('#accuseSuspectGrid .pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    sGrid.appendChild(chip);
+  });
+  const iGrid = document.getElementById('accuseItemGrid'); iGrid.innerHTML='';
+  ITEMS.forEach(it=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = it.emoji+' '+it.name;
+    chip.dataset.id=it.id;
+    chip.onclick = ()=>{ document.querySelectorAll('#accuseItemGrid .pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    iGrid.appendChild(chip);
+  });
+  const rGrid = document.getElementById('accuseRoomGrid'); rGrid.innerHTML='';
+  ROOMS.forEach(r=>{
+    const chip = document.createElement('div'); chip.className='pick-chip'; chip.textContent = r.emoji+' '+r.name;
+    chip.dataset.id=r.id;
+    chip.onclick = ()=>{ document.querySelectorAll('#accuseRoomGrid .pick-chip').forEach(c=>c.classList.remove('selected')); chip.classList.add('selected'); };
+    rGrid.appendChild(chip);
+  });
+  openOverlay('accuseOverlay');
+}
+
+function submitAccusation(){
+  const sChip = document.querySelector('#accuseSuspectGrid .pick-chip.selected');
+  const iChip = document.querySelector('#accuseItemGrid .pick-chip.selected');
+  const rChip = document.querySelector('#accuseRoomGrid .pick-chip.selected');
+  if(!sChip||!iChip||!rChip){ showInfo('세 가지를 모두 선택해주세요!','🤔'); return; }
+  closeOverlay('accuseOverlay');
+  const cp = currentPlayer();
+  const guess = {suspect:sChip.dataset.id, item:iChip.dataset.id, room:rChip.dataset.id};
+  const correct = guess.suspect===state.solution.suspect && guess.item===state.solution.item && guess.room===state.solution.room;
+  if(correct){
+    state.phase='ended';
+    state.winnerId = cp.id;
+    addLog(`🎉 ${cp.name}님이 정답을 맞췄어요! 사건 해결!`);
+    saveState();
+    showWin(true, cp);
+  } else {
+    cp.active = false;
+    addLog(`❌ ${cp.name}님의 고발이 틀렸어요. 이제 이동할 수 없지만 반증은 도와줄 수 있어요.`);
+    const stillActive = state.players.filter(p=>p.active);
+    if(stillActive.length===0){
+      state.phase='ended';
+      addLog('😱 아무도 사건을 해결하지 못했어요...');
+      saveState();
+      showWin(false, null);
+    } else {
+      endTurn();
+    }
+  }
+}
+
+function showWin(won, winner){
+  document.getElementById('winEmoji').textContent = won? '🎉':'😢';
+  document.getElementById('winTitle').textContent = won? `${winner.name}님 승리!` : '아무도 못 맞췄어요!';
+  document.getElementById('winSubtitle').textContent = '진짜 범인은...';
+  document.getElementById('winSolution').innerHTML = `
+    <div class="mini-card">${getCardLabel(state.solution.suspect)}</div>
+    <div class="mini-card">${getCardLabel(state.solution.item)}</div>
+    <div class="mini-card">${getCardLabel(state.solution.room)}</div>`;
+  openOverlay('winOverlay');
+}
+
+// ===================== 메모장 =====================
+function openNotepad(){
+  const key = 'notes_'+myPlayerId;
+  if(!notes[key]) notes[key]={};
+  const container = document.getElementById('notepadContainer');
+  container.innerHTML='';
+  const myHand = state.hands[myPlayerId]||[];
+
+  function buildSection(title, list){
+    const section = document.createElement('div');
+    section.className='notepad-section';
+    const h = document.createElement('h3');
+    h.textContent = title;
+    section.appendChild(h);
+    const scrollWrap = document.createElement('div');
+    scrollWrap.className='notepad-scroll';
+    const table = document.createElement('table');
+    table.className='notepad-table';
+
+    const trh = document.createElement('tr');
+    trh.appendChild(document.createElement('th'));
+    state.players.forEach(p=>{
+      const th = document.createElement('th');
+      th.textContent = p.id===myPlayerId ? '나' : p.name;
+      trh.appendChild(th);
+    });
+    table.appendChild(trh);
+
+    list.forEach(c=>{
+      const tr = document.createElement('tr');
+      const th = document.createElement('td'); th.textContent = c.emoji+' '+c.name; th.style.textAlign='left'; th.style.fontWeight='bold';
+      tr.appendChild(th);
+      const known = myHand.includes(c.id);
+      state.players.forEach(p=>{
+        const td = document.createElement('td');
+        let val;
+        if(known){
+          val = p.id===myPlayerId ? 'yes' : 'no';
+          td.style.opacity='0.55';
+        } else {
+          val = (notes[key][c.id]||{})[p.id] || '';
+          td.onclick = ()=>{
+            if(!notes[key][c.id]) notes[key][c.id]={};
+            const cur = notes[key][c.id][p.id];
+            const next = cur==='yes' ? 'no' : (cur==='no' ? null : 'yes');
+            if(next) notes[key][c.id][p.id]=next; else delete notes[key][c.id][p.id];
+            openNotepad();
+          };
+        }
+        td.textContent = val==='yes' ? '✔' : (val==='no' ? '✖' : '');
+        if(val==='yes') td.classList.add('checked');
+        if(val==='no') td.classList.add('marked');
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+    scrollWrap.appendChild(table);
+    section.appendChild(scrollWrap);
+    return section;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'notepad-grid';
+  grid.appendChild(buildSection('🕵️ 용의자', SUSPECTS));
+  grid.appendChild(buildSection('🎒 무엇에 담았나', ITEMS));
+  grid.appendChild(buildSection('📍 장소', ROOMS));
+  container.appendChild(grid);
+  openOverlay('notepadOverlay');
+}
+
+// enter key helper for join code
+document.addEventListener('DOMContentLoaded', ()=>{
+  const jc = document.getElementById('joinCode');
+  if(jc) jc.addEventListener('keyup', e=>{ if(e.key==='Enter') joinOnlineRoom(); });
+});
+
+attemptAutoRejoin(); // 이전에 온라인 방에 있었다면 자동으로 재접속을 시도한다
+
+</script>
+</body>
+</html>
