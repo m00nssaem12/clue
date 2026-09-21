@@ -1692,6 +1692,11 @@ function renderLog(){
 function isNpcSuspect(suspectId){
   return !state.players.some(p=>p.suspectId===suspectId);
 }
+// 이 용의자 말을 맡은 플레이어의 닉네임 (아무도 안 맡았으면 null)
+function getPlayerNameForSuspect(suspectId){
+  const owner = state.players.find(p=>p.suspectId===suspectId);
+  return owner ? owner.name : null;
+}
 
 function bfsReachable(start, maxSteps){
   const result = new Set();
